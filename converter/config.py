@@ -1,0 +1,14 @@
+INCIDENT_ANGLE_AXIS = 'theta'
+MONITOR_DETECTOR_NAME = 'ante_monitor'
+TIME_DETECTOR_NAME = 'ante_timer'
+POLARISATION_DEVICES = ['flipper_1', 'flipper_2']  # position in list use for define position od polarisation
+SLIT_DEVICES = ['slit1', 'slit2']
+POLARISATION_STATES = {'m': 'on', 'p': 'off'}
+FACILITY = 'BNC'
+DEFAULT_AFFILIATION = 'BNC user'
+DATA2D = '2Ddata'
+POLARISATION = 0.98
+INTENSITY = 1
+WAVELENGTH_RESOLUTION = 0.036
+VERSION = "0.1.0"
+DEFAULT_DETECTOR = "center_roi"

@@ -1,0 +1,10 @@
+/data_test/
+/data_test/*
+/data/
+/magic_nob_fat-master/
+/.venv/
+/.idea/
+*.ort
+*.nxs
+*.pdf
+*.dat
