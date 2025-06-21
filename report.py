@@ -47,7 +47,8 @@ config = ConfigReport(
 
 report_data = AnalyserOrso(args.input_file, config).result
 report = ReportGenerator(report_data)
-if args.mode=="make":
+
+if args.mode == "make":
     report.savepdf(args.output_file)
 else:
     report.show()

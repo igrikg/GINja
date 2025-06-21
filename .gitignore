@@ -8,3 +8,4 @@
 *.nxs
 *.pdf
 *.dat
+/report_config.json

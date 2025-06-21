@@ -76,6 +76,7 @@ class ReportGenerator:
 
     def draw_evaluation(self):
         ax = self.fig.add_subplot(self.gs[0:3, :])
+        ax.set_facecolor((0, 0, 0, 0))
         ax.axis("off")
         ax.text(20, 0, "Measurement Report:", horizontalalignment="center", fontdict={"fontweight": "bold"})
         ax.text(0, -20, "Instrument:")
@@ -140,6 +141,7 @@ class ReportGenerator:
 
     def plot_reflectivity(self):
         ax = self.fig.add_subplot(self.gs[4:9, 1:])
+        ax.set_facecolor((0, 0, 0, 0))
         ax.set_title("Measured Reflectivity", fontsize=10)
         y_lim = [1e-2, 2.0]
         for data in self.result.data:
@@ -181,7 +183,7 @@ class ReportGenerator:
             ax = self.fig.add_subplot(self.gs[11:16, 1:])
 
         ax.set_title("Corrected Reflectivity")
-
+        ax.set_facecolor((0, 0, 0, 0))
         Q = self.result.data[0].x
         index_up = self.result.polar_pos.get(Polarization.po) \
             if self.result.polar_pos.get(Polarization.po) is not None \
@@ -243,6 +245,7 @@ class ReportGenerator:
 
     def plot_polarization(self):
         ax = self.fig.add_subplot(self.gs[11:16, 6:])
+        ax.set_facecolor((0, 0, 0, 0))
         ax.set_title("Calculated Polarization")
 
         P = 100 * self.result.polarisation.y
@@ -273,12 +276,11 @@ class ReportGenerator:
 
     def draw_parameters(self):
         ax = self.fig.add_subplot(self.gs[17:, :])
+        ax.set_facecolor((0, 0, 0, 0))
         ax.axis("off")
         ax.text(50, 10, f"Correction completed in file: {self.result.main.filename}",
                 horizontalalignment="center", fontdict={"fontweight": "bold"},
                 fontsize=12)
-        delta = -5
-        correction = self.result.main.correction
 
         def wrap_list_of_strings(strings, max_width=52):
             wrapped = []

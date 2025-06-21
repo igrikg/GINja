@@ -132,6 +132,33 @@
 
 ---
 
+## 🖼 GUI Report Tool
+
+This GUI provides an interactive interface to configure reflectometry report parameters, preview the result, and export to PDF. It is built with `customtkinter` and integrates Matplotlib for visual feedback.
+
+### ✨ Features
+
+- Left sidebar with editable parameters (`M_ref`, `R_ref`, `alpha_spec`, etc.)
+- File selection and display of input file name
+- Optional auto-update of plot when any parameter is changed
+- Buttons to update or export the report PDF
+- Live preview of the generated report using Matplotlib (A4 portrait ratio)
+- Placeholder report view with message when no input data is available
+- Auto-save of report settings on app exit
+
+---
+### 🖼 Screenshot Placeholder
+
+![Report GUI Screenshot](docs/gui_placeholder.png)
+
+---
+
+### 💾 Auto-Saving
+
+On exit, the app automatically saves the last used configuration to `config_report.json`. When launched again, the app can optionally preload that configuration.
+
+---
+
 ## 📁 Project Structure
    ``` bash
    GINja/
@@ -141,6 +168,7 @@
    ├── requirements.txt
    ├── converter.py              # Main converter to ORSO
    ├── report.py                 # Reflectivity figure/PDF generator
+   ├── reportGUI.py              # GUI version of reflectivity figure/PDF generator
    ├── nob_type_converter.py     # Converts 2D detector data to NOB-type file
    ├── README.md
    └── .venv/                    # Local virtual environment (not committed)
