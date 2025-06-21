@@ -1,6 +1,6 @@
 # GINja — Reflectometry Data Conversion and Reporting Tools
 
-**GINja** is a Python-based CLI toolkit for converting raw reflectometry data from the **[GINA reflectometer](https://bnc.hu/gina/)** into standardized [ORSO](https://www.reflectometry.org/) format files, visualizing results, and preparing NOB ORSO type file.
+**GINja** is a Python-based CLI toolkit for converting raw reflectometry data from the **[GINA reflectometer](https://bnc.hu/gina/)** into standardized **[ORSO](https://www.reflectometry.org/)** format files, visualizing results, and preparing NOB ORSO type file.
 
 ---
 
@@ -19,7 +19,7 @@
    ```bash
    git clone https://github.com/igrikg/GINja.git
    cd GINja
-
+   
 2. Create and activate a virtual environment:
 
    ```bash
@@ -188,18 +188,18 @@ Feel free to use, modify, and share with attribution.
 
 
 ## 🙏 Acknowledgements
-Responsible for GINA Reflectometer @ BNC
 
-Uses ORSO as standard output format
+We gratefully acknowledge the team responsible for the **[GINA reflectometer](https://bnc.hu/gina/)** at the Budapest Neutron Centre ([BNC](https://bnc.hu/)) for their invaluable contributions.
 
-PSI NOB-type converter added for institutional reporting needs
+Special thanks to the developers of the **[Nicos](https://nicos-controls.org/)** control system, whose efforts have significantly enhanced our operational capabilities.
 
-Have feedback or want to contribute?
-Open an issue or submit a pull request!
+We recognize the use of **[ORSO](https://www.reflectometry.org/)** as the standard output format for reflectometry data.
+
+Additionally, we acknowledge the developer of the PSI NOB-type converter, created to fulfill specific institutional reporting needs.
 
 ---
 
 ## 🙋 Feedback & Contributions
 
 Have feedback or want to contribute?  
-[Open an issue](https://github.com/igrikg/GINja/issues) or submit a pull request!
+Open [an issue](https://github.com/igrikg/GINja/issues) or submit a pull request!
