@@ -1,8 +1,11 @@
 import json
+import os
+import sys
 from pathlib import Path
 
 import customtkinter as ctk
 import tkinter.filedialog
+import tkinter.messagebox
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 from dataclasses import dataclass, asdict
@@ -36,7 +39,17 @@ class ReportApp(ctk.CTk):
         self.title("Reflectivity Report Generator")
         self.geometry("1000x600")
         ctk.set_appearance_mode("light")
-        ctk.set_default_color_theme("themes/violet.json")
+        
+        # Resolve resource paths
+        self.base_path = os.path.dirname(os.path.abspath(__file__))
+        theme_path = os.path.join(self.base_path, "themes", "violet.json")
+        
+        if os.path.exists(theme_path):
+            ctk.set_default_color_theme(theme_path)
+        else:
+            print(f"Warning: Theme file not found at {theme_path}, using default.")
+            ctk.set_default_color_theme("blue") # Fallback
+            
         appearance_mode = ctk.get_appearance_mode()
         self.__bg_color = "#D3CFFC" if appearance_mode == "Dark" else "#EAE8FC"
 
@@ -96,13 +109,18 @@ class ReportApp(ctk.CTk):
 
     def build_sidebar(self):
         # --- Load and place logo image ---
-        logo_image = ctk.CTkImage(
-            light_image=Image.open("themes/BNC_logo.png"),
-            dark_image=Image.open("themes/BNC_logo.png"),
-            size=(150, 56)  # Adjust to fit your sidebar
-        )
-        logo_label = ctk.CTkLabel(self.sidebar, image=logo_image, text="")
-        logo_label.pack(pady=(30, 0))
+        try:
+            logo_path = os.path.join(self.base_path, "themes", "BNC_logo.png")
+            if os.path.exists(logo_path):
+                logo_image = ctk.CTkImage(
+                    light_image=Image.open(logo_path),
+                    dark_image=Image.open(logo_path),
+                    size=(150, 56)  # Adjust to fit your sidebar
+                )
+                logo_label = ctk.CTkLabel(self.sidebar, image=logo_image, text="")
+                logo_label.pack(pady=(30, 0))
+        except Exception as e:
+            print(f"Error loading logo: {e}")
 
         ctk.CTkLabel(self.sidebar, text="Report Settings", font=("Arial", 18)).pack(pady=10)
         filename_frame = ctk.CTkFrame(self.sidebar)
@@ -218,7 +236,9 @@ class ReportApp(ctk.CTk):
             self.get_report().savepdf(file_path)
             print(f"Saved to {file_path}")
 
-
-if __name__ == "__main__":
+def main():
     app = ReportApp()
     app.mainloop()
+
+if __name__ == "__main__":
+    main()

@@ -165,7 +165,7 @@ class DataReduction:
                 dataset.result.dR /= max_value
 
         if self.__parameters.normalisation.intensity_norm_type == IntensityTypeCorrection.psdRegion:
-            raise NotImplementedError()
+            raise NotImplementedError("IntensityTypeCorrection.psdRegion is not implemented yet")
 
     @property
     def result(self) -> List[DataSet]:

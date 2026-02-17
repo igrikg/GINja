@@ -2,11 +2,54 @@ import ast
 import itertools
 import numpy as np
 from typing import Any, List, Union, Tuple
+from collections import Counter
 from dataclasses import fields, is_dataclass
-
+from pprint import pprint
 from .datatypes import PolarizationEnum, SampleData
 from .config import POLARISATION_STATES, POLARISATION_DEVICES
 
+def detect_patterns_multi(arr, max_len=4):
+    """
+    Detect repeating pattern for each column independently
+    """
+    n_rows, n_cols = arr.shape
+    patterns = []
+
+    for col in range(n_cols):
+        col_data = arr[:, col]
+        best_pattern = None
+        best_score = -1
+
+        for L in range(1, max_len + 1):
+            # Split column into chunks of length L
+            chunks = [col_data[i:i+L] for i in range(0, n_rows, L)]
+
+            # Compute consensus for each position
+            consensus = []
+            for j in range(L):
+                pos_vals = [chunk[j] for chunk in chunks if j < len(chunk)]
+                most_common, count = Counter(pos_vals).most_common(1)[0]
+                consensus.append(most_common)
+
+            # Score: how many elements match the consensus
+            score = sum(col_data[i] == consensus[i % L] for i in range(n_rows))
+
+            if score > best_score:
+                best_score = score
+                best_pattern = consensus
+
+        patterns.append(best_pattern)
+
+    return patterns
+
+def correct_array_multi(arr, patterns):
+    n_rows, n_cols = arr.shape
+    corrected = arr.copy()
+
+    for col in range(n_cols):
+        pattern = patterns[col]
+        corrected[:, col] = [pattern[i % len(pattern)] for i in range(n_rows)]
+    return corrected
 
 def safety_div(first_arg, second_arg, epsilon=1e-12):
     second_safe = np.where(np.abs(second_arg) < epsilon, 1/epsilon, second_arg)
@@ -31,7 +74,7 @@ def get_sample_from_str(string: str, sample_name: str) -> SampleData:
     return SampleData(sample_name)
 
 
-def get_indexes(data: np.array, filter_value: Any) -> np.array:
+def get_indexes(data: np.typing.NDArray, filter_value: Any) -> np.typing.NDArray:
     """
 
     :param data: array with data for search the
@@ -43,19 +86,26 @@ def get_indexes(data: np.array, filter_value: Any) -> np.array:
         else np.array(data == filter_value).astype('int')
 
 
-def filter_along_axis(arr: np.array, mask: np.array, axis: int) -> np.array:
+def filter_along_axis(arr: np.typing.NDArray, mask: np.typing.NDArray, axis: int) -> np.typing.NDArray:
     index = [slice(None)] * arr.ndim
     index[axis] = mask.astype('bool')
     return arr[tuple(index)]
 
+def fix_flipper_position(flippers_data: np.typing.NDArray)->np.typing.NDArray:
+    patterns = detect_patterns_multi(flippers_data, max_len=4)
+    res= correct_array_multi(flippers_data, patterns)
+    return res
 
-def polarisation_filter(flippers_data: np.array, ydata: np.array,
-                        polarisation: PolarizationEnum, axis=0) -> (np.array, np.array):
+
+
+
+def polarisation_filter(flippers_data: np.typing.NDArray, ydata: np.typing.NDArray,
+                        polarisation: PolarizationEnum, axis=0) -> (np.typing.NDArray, np.typing.NDArray):
     """
 
     :param flippers_data: array of flippers data
     :param ydata: array for detector
-    :param polarisation: Polarisarion stage
+    :param polarisation: Polarisation stage
     :param axis: it is needed to filter for other axis in ydata
     :return: filtered ydata
     """
@@ -63,8 +113,8 @@ def polarisation_filter(flippers_data: np.array, ydata: np.array,
         return ydata
     filter_value = [POLARISATION_STATES.get(symbol) for symbol in polarisation.value if symbol != 'o']
     filter_data = get_indexes(flippers_data, filter_value)
-    return filter_along_axis(ydata, filter_data, axis)
 
+    return filter_along_axis(ydata, filter_data, axis)
 
 def convert_dataclass(src, target_cls):
     assert is_dataclass(src) and is_dataclass(target_cls), "Both must be dataclasses"

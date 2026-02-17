@@ -4,6 +4,55 @@
 
 ---
 
+## 📦 System Installation & Usage (Recommended)
+
+To ensure all dependencies are correctly installed and to avoid conflicts with system packages (especially on Ubuntu/Debian), **using the setup script is recommended**. This method automatically creates a private virtual environment for the application.
+
+### Installation
+
+1.  Clone the repository:
+    ```bash
+    git clone https://github.com/igrikg/GINja.git
+    cd GINja
+    ```
+
+2.  Install the package:
+
+    **Option A: System-wide Install (Recommended)**
+    This will create a private virtual environment in `/usr/local/share/GINja/venv` and link the tools to `/usr/local/bin`, making them available to all users.
+    ```bash
+    sudo python3 setup.py install
+    ```
+    
+    **Option B: User Install**
+    If you don't have sudo access, you can install for your user only. This creates the environment in `~/.local/share/GINja/venv`.
+    ```bash
+    python3 setup.py install
+    ```
+
+    **Desktop Shortcuts:**
+    On Linux systems, the installation process will automatically attempt to create desktop shortcuts for the GUI tools in your application menu.
+
+### Usage
+
+Once installed, you can run the tools directly from your terminal:
+
+*   **GUI Tools:**
+    *   `ginja-converter`: Launches the Converter GUI.
+    *   `ginja-report`: Launches the Report GUI.
+    
+    *(You can also find "GINja Converter" and "GINja Report" in your system's application menu)*
+
+*   **CLI Tools:**
+    *   `GINja_converter`: Command-line interface for conversion.
+    *   `GINja_report`: Command-line interface for reporting.
+
+---
+
+## 🛠 Manual Usage (Without Installation)
+
+If you prefer to run the scripts directly without installing the package, follow the instructions below.
+
 ## ✨ Features
 
 - Convert GINA `.nxs` or `.dat` files to ORSO `.ort` format
@@ -13,23 +62,26 @@
 
 ---
 
-## 📦 Installation
+## 📦 Manual Installation
 
 1. Clone this repository:
    ```bash
    git clone https://github.com/igrikg/GINja.git
    cd GINja
+   ```
    
 2. Create and activate a virtual environment:
 
    ```bash
    python -m venv .venv
    source .venv/bin/activate        # On Windows: .venv\Scripts\activate
+   ```
    
 3. Install the dependencies:
 
    ```bash
    pip install -r requirements.txt
+   ```
 
 ---
 

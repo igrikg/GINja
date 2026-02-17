@@ -1,8 +1,10 @@
+import os
 import re
 import ast
 import numpy as np
 import pandas as pd
 
+from PIL import Image
 from typing import Iterable
 from datetime import datetime
 from collections import defaultdict
@@ -12,7 +14,7 @@ from nexusformat.nexus import nxload
 from .datatypes import PolarizationEnum, PersonData, ExperimentData, SampleData, MeasurementData, SlitData, \
     InstrumentSettingsData, PolarisationEfficiencyData
 from .metadata import Metadata
-from .utils import polarisation_filter, get_polarisation, get_sample_from_str
+from .utils import polarisation_filter, get_polarisation, get_sample_from_str, fix_flipper_position
 from .config import POLARISATION_DEVICES, INCIDENT_ANGLE_AXIS, SLIT_DEVICES, MONITOR_DETECTOR_NAME, \
     TIME_DETECTOR_NAME
 
@@ -26,8 +28,8 @@ class NexusFile(Metadata):
             The local path to the file on the local filesystem.
     """
 
-    def __init__(self, file_path: str):
-        super().__init__(file_path)
+    def __init__(self, file_path: str, fix_polarisation=True):
+        super().__init__(file_path, fix_polarisation)
         self.nxfile = nxload(file_path)
 
     @property
@@ -93,14 +95,14 @@ class NexusFile(Metadata):
         return self.nxdata.axes.split(',')
 
     @property
-    def monitor(self) -> np.array:
+    def monitor(self) -> np.typing.NDArray:
         """
             Returns the name of monitor devices for data calculation.
         """
         return self.entry.NXmonitor[0].monitor.nxdata
 
     @property
-    def time(self) -> np.array:
+    def time(self) -> np.typing.NDArray:
         """
             Returns the name of times devices for data calculation.
         """
@@ -114,28 +116,31 @@ class NexusFile(Metadata):
         return get_polarisation(self.dev_list)
 
     @property
-    def flippers_data(self) -> np.array:
+    def flippers_data(self) -> np.typing.NDArray:
         """
         Returns the data of spin flippers.
         """
         res = [self.nxdata.get(dev).astype('str') for dev in POLARISATION_DEVICES if dev in self.dev_list]
         if res:
-            return np.column_stack(res)
+            if self._fix_polarisation:
+                 return  fix_flipper_position(np.column_stack(res))
+            else:
+                return np.column_stack(res)
         return np.array([])
 
-    def get_dataset(self, detector_name: str, polarisation: PolarizationEnum) -> np.array:
+    def get_dataset(self, detector_name: str, polarisation: PolarizationEnum) -> np.typing.NDArray:
         """
         Returns the list of scanning device for data calculation.
         """
         return polarisation_filter(self.flippers_data, self.nxdata.get(detector_name).nxdata, polarisation)
 
-    def get_dataset_monitor(self, polarisation: PolarizationEnum) -> np.array:
+    def get_dataset_monitor(self, polarisation: PolarizationEnum) -> np.typing.NDArray:
         """
         Returns the data of monitor devices for data calculation.
         """
         return polarisation_filter(self.flippers_data, self.entry.NXmonitor[0].monitor.nxdata, polarisation)
 
-    def get_dataset_time(self, polarisation: PolarizationEnum) -> np.array:
+    def get_dataset_time(self, polarisation: PolarizationEnum) -> np.typing.NDArray:
         """
         Returns the data of monitor devices for data calculation.
         """
@@ -221,6 +226,17 @@ class NexusFile(Metadata):
                                     )
 
 
+def relative_to_full_path(dat_file_path, rel_path)->str:
+    base_path = os.path.dirname(dat_file_path)
+    full_path = os.path.join(base_path, rel_path)
+    return str(full_path)
+
+
+def load_tiff_pil(file_path):
+    img = Image.open(file_path)
+    return np.array(img)
+
+
 class ScanDataReader:
     """
         Class for parsing of Nicos scan file
@@ -284,6 +300,28 @@ class ScanDataReader:
         self.header = header
         self.header_units = header_units
         self.df = pd.DataFrame(data_lines, columns=header)
+        self.load_2d_data()
+
+    def load_2d_data(self):
+        file_column = self.__get_tiff_column_name()
+        if file_column:
+            file_exist = self.df[file_column].apply(lambda x, self=self: os.path.exists(relative_to_full_path(self.file_path, x)))
+            if not all(file_exist):
+                return
+
+            self.df["2Ddata"] = self.df[file_column].apply(lambda x, self=self:
+                                                             load_tiff_pil(relative_to_full_path(self.file_path, x)))
+
+            header_no_files = list(filter(lambda x: not x.startswith('file'), self.header))
+            self.header = header_no_files + ['2Ddata'] + self.header[len(header_no_files):]
+
+    def __get_tiff_column_name(self) -> str | None:
+        for col_name in self.df.columns[self.df.columns.str.startswith('file')]:
+            value = self.df.at[0, col_name]
+            if isinstance(value, str):
+                if value.endswith(".tiff"):
+                    return col_name
+        return None
 
     def get_devices(self) -> list[str]:
         index = self.header.index(';')
@@ -307,8 +345,8 @@ class ScanDataFile(Metadata):
                 The local path to the file on the local filesystem.
     """
 
-    def __init__(self, file_path: str):
-        super().__init__(file_path)
+    def __init__(self, file_path: str, fix_polarisation=True):
+        super().__init__(file_path, fix_polarisation)
         self.scan_file = ScanDataReader(file_path)
 
     @property
@@ -340,14 +378,14 @@ class ScanDataFile(Metadata):
         return self.scan_file.get_devices()
 
     @property
-    def monitor(self) -> np.array:
+    def monitor(self) -> np.typing.NDArray:
         """
         Returns the data of monitor devices for data calculation.
         """
         return self.dataset[MONITOR_DETECTOR_NAME].to_numpy().astype('float')
 
     @property
-    def time(self) -> np.array:
+    def time(self) -> np.typing.NDArray:
         """
         Returns the data of times devices for data calculation.
         """
@@ -361,29 +399,35 @@ class ScanDataFile(Metadata):
         return get_polarisation(self.dev_list)
 
     @property
-    def flippers_data(self) -> np.array:
+    def flippers_data(self) -> np.typing.NDArray:
         """
             Returns the data of spin flippers.
         """
         res = [self.dataset[dev].to_numpy() for dev in POLARISATION_DEVICES if dev in self.dev_list]
         if res:
-            return np.column_stack(res)
+            if self._fix_polarisation:
+                return fix_flipper_position(np.column_stack(res))
+            else:
+                return np.column_stack(res)
         return np.array([])
 
-    def get_dataset(self, detector_name: str, polarisation: PolarizationEnum) -> np.array:
+    def get_dataset(self, detector_name: str, polarisation: PolarizationEnum) -> np.typing.NDArray:
         """
         Returns the list of scanning device for data calculation.
         """
+        if detector_name == "2Ddata":
+            return polarisation_filter(self.flippers_data, np.stack(self.dataset["2Ddata"].values).astype('float'),
+                                       polarisation)
         return polarisation_filter(self.flippers_data, self.dataset[detector_name].to_numpy().astype('float'),
                                    polarisation)
 
-    def get_dataset_monitor(self, polarisation: PolarizationEnum) -> np.array:
+    def get_dataset_monitor(self, polarisation: PolarizationEnum) -> np.typing.NDArray:
         """
         Returns the data of monitor devices for data calculation.
         """
         return polarisation_filter(self.flippers_data, self.monitor, polarisation)
 
-    def get_dataset_time(self, polarisation: PolarizationEnum) -> np.array:
+    def get_dataset_time(self, polarisation: PolarizationEnum) -> np.typing.NDArray:
         """
         Returns the data of monitor devices for data calculation.
         """

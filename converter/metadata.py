@@ -10,8 +10,9 @@ class Metadata(ABC):
         the properties that must be implemented by parsing classes.
     """
 
-    def __init__(self, file_path):
+    def __init__(self, file_path, fix_polarisation=False):
         self.file_path = file_path
+        self._fix_polarisation = fix_polarisation
 
     @property
     @abstractmethod

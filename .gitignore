@@ -9,3 +9,6 @@
 *.pdf
 *.dat
 /report_config.json
+/converter_config.json
+/build/
+/GINja.egg-info/
