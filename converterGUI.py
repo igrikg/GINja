@@ -25,7 +25,7 @@ except ImportError as e:
 from converter import (MadeConversion, get_data, CorrectionParameters, DataSourceConfig,
                        NormalisationConfig, ReductionConfig, BackgroundConfig)
 from converter.check_config import check_config
-from converter.datatypes import MuDataEnum, AdsorptionTypeCorrection, BackgroundTypeCorrection, IntensityTypeCorrection, DataSet, PolarizationEnum
+from converter.datatypes import DataSet, PolarizationEnum
 from converter.metadata import Metadata
 
 
@@ -113,7 +113,7 @@ class ConverterApp(ctk.CTk):
         self.title("ORSO Converter GUI")
         self.geometry("1600x900")
         ctk.set_appearance_mode("light")
-
+        
         # Resolve resource paths
         self.base_path = os.path.dirname(os.path.abspath(__file__))
         theme_path = os.path.join(self.base_path, "themes", "violet.json")
@@ -123,13 +123,14 @@ class ConverterApp(ctk.CTk):
         else:
             print(f"Warning: Theme file not found at {theme_path}, using default.")
             ctk.set_default_color_theme("blue") # Fallback
-
+            
         self.config_data = load_config('converter_config.json')
         self.input_file = ''
         self.data_object: Union[Metadata, None] = None
         self.filename_var = ctk.StringVar(value="No file selected")
         self.auto_update_var = ctk.BooleanVar(value=True) # Always true
         self.status_var = ctk.StringVar(value="Ready")
+        self.log_scale_var = ctk.BooleanVar(value=True)
         
         self.columnconfigure(1, weight=1)
         self.rowconfigure(0, weight=1)
@@ -672,8 +673,7 @@ class ConverterApp(ctk.CTk):
         if path:
             self.filename_var.set(Path(path).name)
             self.input_file = path
-            #try:
-            if 1:
+            try:
                 self.data_object = get_data(self.input_file)
                 
                 # Update detector list
@@ -689,10 +689,10 @@ class ConverterApp(ctk.CTk):
 
                 self.status_var.set("File loaded")
                 self.on_parameter_change()
-            #except Exception as e:
-            #    print(f"Error loading file: {e}")
-            #    self.status_var.set("Error loading file")
-            #    tkinter.messagebox.showerror("Error", f"Failed to load file:\n{e}")
+            except Exception as e:
+                print(f"Error loading file: {e}")
+                self.status_var.set("Error loading file")
+                tkinter.messagebox.showerror("Error", f"Failed to load file:\n{e}")
 
     def select_background_file(self):
         file_path = tkinter.filedialog.askopenfilename(filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")])
@@ -724,15 +724,19 @@ class ConverterApp(ctk.CTk):
         # Frame for canvas and toolbar
         plot_container = ctk.CTkFrame(self.main_area, fg_color="white")
         plot_container.pack(fill="both", expand=True)
+        toolbar_frame = ctk.CTkFrame(plot_container)
+        toolbar_frame.pack(fill="x")
 
         self.canvas = FigureCanvasTkAgg(self.figure, master=plot_container)
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(fill="both", expand=True)
         
         # Toolbar
-        toolbar = NavigationToolbar2Tk(self.canvas, plot_container)
+        toolbar = NavigationToolbar2Tk(self.canvas, toolbar_frame)
         toolbar.update()
-        self.canvas.get_tk_widget().pack(fill="both", expand=True)
+        
+        # Log scale switch
+        ctk.CTkCheckBox(toolbar, text="Log Scale", variable=self.log_scale_var, command=self.on_parameter_change).pack(side="right", padx=10)
 
     def update_config_from_ui(self):
         self.config_data.output_name = self.inputs['output_name'][0].get()
@@ -851,7 +855,8 @@ class ConverterApp(ctk.CTk):
         
         ax.set_xlabel("Q ($Å^{-1}$)")
         ax.set_ylabel("R")
-        ax.set_yscale('log')
+        scale_type = "log" if self.log_scale_var.get() else "linear"
+        ax.set_yscale(scale_type)
         ax.set_title("Reflectivity")
         ax.legend()
         ax.grid(True, which="both", ls="-", alpha=0.5)
@@ -873,16 +878,15 @@ class ConverterApp(ctk.CTk):
         if not self.data_object:
             return
 
-        #try:
-        if 1:
+        try:
             parameters = self.get_parameters()
             converter = MadeConversion(self.data_object, parameters)
             results = converter.result
             self.update_plot(results)
             self.status_var.set("Plot updated")
-        #except Exception as e:
-        #    print(f"Preview error: {e}")
-        #    self.status_var.set(f"Preview error: {e}")
+        except Exception as e:
+            print(f"Preview error: {e}")
+            self.status_var.set(f"Preview error: {e}")
 
     def run_conversion_and_save(self):
         if not self.input_file:

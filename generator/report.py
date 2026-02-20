@@ -1,4 +1,5 @@
 import textwrap
+import os
 from pathlib import Path
 
 import numpy as np
@@ -61,18 +62,24 @@ class ReportGenerator:
             nrows=20, ncols=10, left=0.02, right=0.92, top=0.88, bottom=0.05, hspace=1.5, wspace=0.8
         )
 
+        # Resolve image paths
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        header_path = os.path.join(base_path, "header.png")
+        footer_path = os.path.join(base_path, "footer.png")
 
         # Add header image (top)
-        header_img = mpimg.imread("generator/header.png")
-        header_ax = self.fig.add_axes((0.0, 0.90, 1.0, 0.1))  # [left, bottom, width, height]
-        header_ax.imshow(header_img)
-        header_ax.axis("off")
+        if os.path.exists(header_path):
+            header_img = mpimg.imread(header_path)
+            header_ax = self.fig.add_axes((0.0, 0.90, 1.0, 0.1))  # [left, bottom, width, height]
+            header_ax.imshow(header_img)
+            header_ax.axis("off")
 
         # Add footer image (bottom)
-        footer_img = mpimg.imread("generator/footer.png")
-        footer_ax = self.fig.add_axes((0.0, 0.001, 1.0, 0.05))  # [left, bottom, width, height]
-        footer_ax.imshow(footer_img)
-        footer_ax.axis("off")
+        if os.path.exists(footer_path):
+            footer_img = mpimg.imread(footer_path)
+            footer_ax = self.fig.add_axes((0.0, 0.001, 1.0, 0.05))  # [left, bottom, width, height]
+            footer_ax.imshow(footer_img)
+            footer_ax.axis("off")
 
     def draw_evaluation(self):
         ax = self.fig.add_subplot(self.gs[0:3, :])

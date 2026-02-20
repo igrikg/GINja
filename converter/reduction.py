@@ -178,6 +178,5 @@ class DataReduction:
         if path is not None:
             filename = Path(path) / filename
         if path is None and folder_input_file:
-            filename = Path(self.__data.file_path).parent.name / Path(filename)
-
+            filename = Path(self.__data.file_path).parent / Path(filename).stem
         OrsoData(self.result, self.__parameters).save(filename)
