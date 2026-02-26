@@ -442,8 +442,8 @@ class ScanDataFile(Metadata):
         users_str = self.metadata['Experiment information']['Exp_users']
         if '{' in users_str and '}' in users_str:
             users_str = ast.literal_eval(users_str)
-            if users_str is isinstance(users_str, Iterable):
-                user = ast.literal_eval(users_str)[0]
+            if isinstance(users_str, Iterable) and not isinstance(users_str, str):
+                user = users_str[0] if isinstance(users_str, (list, tuple)) else users_str
             else:
                 user = users_str
         else:

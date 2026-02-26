@@ -41,7 +41,11 @@ class ReportApp(ctk.CTk):
         ctk.set_appearance_mode("light")
         
         # Resolve resource paths
-        self.base_path = os.path.dirname(os.path.abspath(__file__))
+        if getattr(sys, 'frozen', False):
+            self.base_path = sys._MEIPASS
+        else:
+            self.base_path = os.path.dirname(os.path.abspath(__file__))
+            
         theme_path = os.path.join(self.base_path, "themes", "violet.json")
         
         if os.path.exists(theme_path):

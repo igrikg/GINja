@@ -21,17 +21,21 @@ def detect_patterns_multi(arr, max_len=4):
         best_score = -1
 
         for L in range(1, max_len + 1):
-            # Split column into chunks of length L
+            if L > n_rows:
+                break
             chunks = [col_data[i:i+L] for i in range(0, n_rows, L)]
 
-            # Compute consensus for each position
             consensus = []
             for j in range(L):
                 pos_vals = [chunk[j] for chunk in chunks if j < len(chunk)]
+                if not pos_vals:
+                    break
                 most_common, count = Counter(pos_vals).most_common(1)[0]
                 consensus.append(most_common)
 
-            # Score: how many elements match the consensus
+            if len(consensus) != L:
+                break
+
             score = sum(col_data[i] == consensus[i % L] for i in range(n_rows))
 
             if score > best_score:
@@ -65,8 +69,15 @@ def get_polarisation(dev_list: List[str]) -> list[PolarizationEnum]:
 
 def get_sample_from_str(string: str, sample_name: str) -> SampleData:
     samples_dict = ast.literal_eval(string)
-    samples_dict = samples_dict[0] if isinstance(samples_dict, Union[List, Tuple]) else samples_dict
-    samples = [val for val in samples_dict.values() if sample_name == val.get('name')]
+    if isinstance(samples_dict, (list, tuple)):
+        if len(samples_dict) == 1:
+            samples_dict = samples_dict[0]
+            samples_list = [samples_dict] if isinstance(samples_dict, dict) else samples_dict
+        else:
+            samples_list = samples_dict
+    else:
+        samples_list = [samples_dict] if isinstance(samples_dict, dict) else samples_dict
+    samples = [val for val in samples_list if isinstance(val, dict) and sample_name == val.get('name')]
     if samples:
         field_names = [field.name for field in fields(SampleData)]
         filtered_dict = {k: v for k, v in samples[0].items() if k in field_names}
@@ -87,9 +98,11 @@ def get_indexes(data: np.typing.NDArray, filter_value: Any) -> np.typing.NDArray
 
 
 def filter_along_axis(arr: np.typing.NDArray, mask: np.typing.NDArray, axis: int) -> np.typing.NDArray:
-    index = [slice(None)] * arr.ndim
-    index[axis] = mask.astype('bool')
-    return arr[tuple(index)]
+    # Create a tuple of slices for dimensions before and after the axis
+    pre_slices = (slice(None),) * axis
+    post_slices = (slice(None),) * (arr.ndim - axis - 1)
+    # Apply the mask at the specified axis
+    return arr[pre_slices + (mask.astype(bool),) + post_slices]
 
 def fix_flipper_position(flippers_data: np.typing.NDArray)->np.typing.NDArray:
     patterns = detect_patterns_multi(flippers_data, max_len=4)
@@ -98,9 +111,8 @@ def fix_flipper_position(flippers_data: np.typing.NDArray)->np.typing.NDArray:
 
 
 
-
 def polarisation_filter(flippers_data: np.typing.NDArray, ydata: np.typing.NDArray,
-                        polarisation: PolarizationEnum, axis=0) -> (np.typing.NDArray, np.typing.NDArray):
+                        polarisation: PolarizationEnum, axis=0) -> np.typing.NDArray:
     """
 
     :param flippers_data: array of flippers data
@@ -124,7 +136,26 @@ def convert_dataclass(src, target_cls):
         value = getattr(src, f.name, None)
         if value is not None:
             try:
-                field_map[f.name] = f.type(value)
+                if hasattr(f.type, '__origin__') and f.type.__origin__ is Union: # Handle Union types
+                    # For simplicity, if it's a Union, we try to convert to the first type that isn't None
+                    # A more robust solution might involve checking if value is instance of one of the types
+                    non_none_types = [t for t in f.type.__args__ if t is not type(None)]
+                    if non_none_types: # If there are actual types in the Union
+                        field_map[f.name] = non_none_types[0](value)
+                    else:
+                        field_map[f.name] = value # Fallback if only None in Union or other issues
+                elif isinstance(f.type, type) and not is_dataclass(f.type):
+                    field_map[f.name] = f.type(value)
+                elif is_dataclass(f.type):
+                    field_map[f.name] = convert_dataclass(value, f.type)  # Recursive call for nested dataclasses
+                else:
+                    field_map[f.name] = value # Direct assignment for other types
             except Exception:
                 field_map[f.name] = value
     return target_cls(**field_map)
+
+
+def regions_overlap(region1: Tuple[int, int, int, int], region2: Tuple[int, int, int, int]) -> bool:
+    y1_min, y1_max, x1_min, x1_max = region1
+    y2_min, y2_max, x2_min, x2_max = region2
+    return not (y2_max < y1_min or y2_min > y1_max or x2_max < x1_min or x2_min > x1_max)

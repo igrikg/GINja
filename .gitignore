@@ -12,3 +12,12 @@
 /converter_config.json
 /build/
 /GINja.egg-info/
+__pycache__
+venv/
+.venv/
+.env
+.coverage
+.pytest_cache
+htmlcov/
+.coverage.*
+    

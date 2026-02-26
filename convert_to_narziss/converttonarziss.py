@@ -251,7 +251,9 @@ class NexusFile(Metadata):
         Returns the data of spin flippers.
         """
         res = [self.nxdata.get(dev).astype('str') for dev in POLARISATION_DEVICES if dev in self.dev_list]
-        return np.column_stack(res)
+        if res:
+            return np.column_stack(res)
+        return np.array([])
 
     def get_dataset(self, detector_name: str, polarisation: Polarization) -> np.array:
         """
@@ -489,7 +491,9 @@ class ScanDataFile(Metadata):
         Returns the data of spin flippers.
         """
         res = [self.dataset[dev].to_numpy() for dev in POLARISATION_DEVICES if dev in self.dev_list]
-        return np.column_stack(res)
+        if res:
+            return np.column_stack(res)
+        return np.array([])
 
     def get_dataset(self, detector_name: str, polarisation: Polarization) -> np.array:
         """
