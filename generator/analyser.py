@@ -52,7 +52,7 @@ class AnalyserOrso:
             c_range = (Q > (0.5 / Q2M)) & (Q <= (1.0 / Q2M))
             a_range = (Q > (1.0 / Q2M)) & (Q <= ((config.M_max + 0.05) / Q2M))
             scale = R[c_range].mean()
-            alpha = 2.0 / (config.M_max - 1) - 2 * np.trapz(R[a_range], Q[a_range] * Q2M) / (
+            alpha = 2.0 / (config.M_max - 1) - 2 * np.trapezoid(R[a_range], Q[a_range] * Q2M) / (
                     scale * (config.M_max - 1) ** 2
             )
         return scale, alpha
