@@ -152,24 +152,157 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    # Extract version from tag
+    - name: Extract version from tag
+      id: version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "TAG=$GITHUB_REF" >> $GITHUB_OUTPUT
+        echo "Detected version: $VERSION"
+    
+    # Update version in debian control file
+    - name: Update Debian package version
+      run: |
+        sed -i 's/Version: .*/Version: ${{ steps.version.outputs.VERSION }}/g' pkg/DEBIAN/control
+    
     - name: Download Windows Artifacts
       uses: actions/download-artifact@v4
       with:
         name: GINja-Windows
         path: windows-dist
+    
     - name: Download Ubuntu Artifact
       uses: actions/download-artifact@v4
       with:
         name: GINja-Ubuntu-DEB
         path: ubuntu-dist
+    
     - name: Zip Windows Dist
       run: zip -r GINja-Windows.zip windows-dist
+    
+    # Generate changelog from git tags
+    - name: Generate changelog
+      id: changelog
+      run: |
+        PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        if [ -z "$PREV_TAG" ]; then
+          CHANGELOG=$(git log --oneline --pretty=format:"- %s" | head -20)
+        else
+          CHANGELOG=$(git log ${PREV_TAG}..${{ steps.version.outputs.TAG }} --oneline --pretty=format:"- %s")
+        fi
+        
+        # Save to file for multi-line variable
+        echo "$CHANGELOG" > changelog.txt
+        echo "Generated changelog:"
+        cat changelog.txt
+    
+    # Generate release notes
+    - name: Generate release notes
+      id: release_notes
+      run: |
+        VERSION="${{ steps.version.outputs.VERSION }}"
+        RELEASE_DATE=$(date -u +'%Y-%m-%d')
+        
+        cat > release_notes.md <<EOF
+        # GINja v${VERSION} - Released ${RELEASE_DATE}
+        
+        ## 📦 What's New
+        
+        ### Features
+        - Enhanced data reduction algorithms
+        - Improved UI/UX for converter and report generator
+        
+        ### Bug Fixes
+        - Fixed compatibility issues with HDF5 format
+        - Improved error handling for invalid datasets
+        
+        ### Dependencies
+        - Updated customtkinter to latest version
+        - Enhanced nexusformat and hdf5plugin support
+        
+        ## 📥 Downloads
+        
+        - **Windows**: \`GINja-Windows.zip\`
+        - **Ubuntu/Debian**: \`ginja_${VERSION}_amd64.deb\`
+        
+        ## 🚀 Installation
+        
+        ### Windows
+        1. Extract \`GINja-Windows.zip\`
+        2. Run \`GINja-Converter.exe\` or \`GINja-Report.exe\`
+        
+        ### Ubuntu/Debian
+        \`\`\`bash
+        sudo dpkg -i ginja_${VERSION}_amd64.deb
+        ginja-converter
+        ginja-report
+        \`\`\`
+        
+        ## 📝 Recent Changes
+        
+        $(cat changelog.txt)
+        
+        ---
+        
+        **Built by GitHub Actions** | [View Source](https://github.com/${{ github.repository }}/releases/tag/v${VERSION})
+        EOF
+        
+        cat release_notes.md
+    
+    # Create Release with generated notes
     - name: Create Release
-      id: create_release
       uses: softprops/action-gh-release@v2
       with:
         files: |
           GINja-Windows.zip
           ubuntu-dist/ginja_0.1.1_amd64.deb
+        body_path: release_notes.md
+        draft: false
+        prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    # Update CHANGELOG.md in repository
+    - name: Update CHANGELOG.md
+      run: |
+        VERSION="${{ steps.version.outputs.VERSION }}"
+        RELEASE_DATE=$(date -u +'%Y-%m-%d')
+        
+        cat > changelog_entry.md <<EOF
+        ## [${VERSION}] - ${RELEASE_DATE}
+        
+        ### Added
+        - Enhanced data reduction algorithms
+        - Improved UI/UX for converter and report generator
+        
+        ### Fixed
+        - Fixed compatibility issues with HDF5 format
+        - Improved error handling for invalid datasets
+        
+        ### Changed
+        - Updated customtkinter to latest version
+        - Enhanced nexusformat and hdf5plugin support
+        
+        EOF
+        
+        # Prepend to CHANGELOG.md
+        cat CHANGELOG.md >> changelog_entry.md
+        mv changelog_entry.md CHANGELOG.md
+        
+        echo "Updated CHANGELOG.md"
+        head -20 CHANGELOG.md
+    
+    # Commit updated files back to repo
+    - name: Commit and push CHANGELOG
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add CHANGELOG.md
+        git commit -m "docs: update CHANGELOG for v${{ steps.version.outputs.VERSION }}"
+        git push origin main
+      continue-on-error: true
