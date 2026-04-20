@@ -84,12 +84,22 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pyinstaller
+    - name: Extract version
+      id: version
+      run: |
+        if [[ $GITHUB_REF == refs/tags/v* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/v}
+        else
+          VERSION="0.1.1"
+        fi
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
     - name: Build with PyInstaller
       run: |
         pyinstaller --noconfirm --onedir --windowed --add-data "themes:themes" --collect-all customtkinter --collect-all nexusformat --collect-all hdf5plugin --name GINja-Converter converterGUI.py
         pyinstaller --noconfirm --onedir --windowed --add-data "themes:themes" --collect-all customtkinter --collect-all nexusformat --collect-all hdf5plugin --name GINja-Report reportGUI.py
     - name: Create Debian Package
       run: |
+        VERSION=${{ steps.version.outputs.VERSION }}
         mkdir -p pkg/DEBIAN
         mkdir -p pkg/usr/bin
         mkdir -p pkg/usr/share/applications
@@ -110,7 +120,7 @@ jobs:
         # Create control file
         cat <<EOF > pkg/DEBIAN/control
         Package: ginja
-        Version: 0.1.1
+        Version: $VERSION
         Section: science
         Priority: optional
         Architecture: amd64
@@ -140,12 +150,12 @@ jobs:
         EOF
         
         # Build the .deb
-        dpkg-deb --build pkg ginja_0.1.1_amd64.deb
+        dpkg-deb --build pkg ginja_${VERSION}_amd64.deb
     - name: Upload Ubuntu Artifact
       uses: actions/upload-artifact@v4
       with:
         name: GINja-Ubuntu-DEB
-        path: ginja_0.1.1_amd64.deb
+        path: "*.deb"
 
   release:
     needs: [build-windows, build-ubuntu]
@@ -165,11 +175,7 @@ jobs:
         echo "TAG=$GITHUB_REF" >> $GITHUB_OUTPUT
         echo "Detected version: $VERSION"
     
-    # Update version in debian control file
-    - name: Update Debian package version
-      run: |
-        sed -i 's/Version: .*/Version: ${{ steps.version.outputs.VERSION }}/g' pkg/DEBIAN/control
-    
+    # Download Artifacts
     - name: Download Windows Artifacts
       uses: actions/download-artifact@v4
       with:
@@ -260,7 +266,7 @@ jobs:
       with:
         files: |
           GINja-Windows.zip
-          ubuntu-dist/ginja_0.1.1_amd64.deb
+          ubuntu-dist/*.deb
         body_path: release_notes.md
         draft: false
         prerelease: false
