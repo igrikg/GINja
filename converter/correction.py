@@ -24,18 +24,26 @@ def footprint_correction_two_slits(angles_deg: NDArray, slits_data: SlitData, sa
     beam_center = s2w - (s1w - s2w) * l2 / (l1+l2)
     beam_size = (s1w + s2w) * (l1 + l2) / (l1 - l2) - s1w
 
-    theta2 = np.arcsin(beam_center / sample_length)
-    theta3 = np.arcsin(beam_size / sample_length)
+    if sample_length <= 0:
+        return np.ones_like(theta)
+
+    arg2 = np.clip(beam_center / sample_length, -1.0, 1.0)
+    theta2 = np.arcsin(arg2)
+    arg3 = np.clip(beam_size / sample_length, -1.0, 1.0)
+    theta3 = np.arcsin(arg3)
 
     full_beam = beam_center + (beam_size - beam_center) / 2.0
-    scale_outer = (beam_size - beam_center) / 2.0 / full_beam
+    scale_outer = np.where(full_beam == 0, 0, (beam_size - beam_center) / 2.0 / full_beam)
+    
+    denom = (theta3 - theta2) ** 2
+    denom = np.where(denom == 0, 1e-10, denom)
 
     correction_factor = np.where(
         theta < theta3,
         np.where(
             theta < theta2,
-            (1.0 - scale_outer) * theta / theta2,
-            (1.0 - scale_outer) + (1.0 - (theta - theta3) ** 2 / (theta3 - theta2) ** 2) * scale_outer,
+            (1.0 - scale_outer) * theta / np.where(theta2 == 0, 1e-10, theta2),
+            (1.0 - scale_outer) + (1.0 - (theta - theta3) ** 2 / denom) * scale_outer,
         ),
         1.0,
     )

@@ -13,6 +13,9 @@ class Metadata(ABC):
     def __init__(self, file_path, fix_polarisation=False):
         self.file_path = file_path
         self._fix_polarisation = fix_polarisation
+        self.sample_override = None
+        self.slit_override = None
+
 
     @property
     @abstractmethod
@@ -130,3 +133,12 @@ class Metadata(ABC):
             Returns the slits data.
         """
         raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def rois(self) -> dict[str, tuple]:
+        """
+        Returns a dictionary of predefined ROIs.
+        """
+        raise NotImplementedError()
+

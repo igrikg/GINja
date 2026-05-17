@@ -225,6 +225,11 @@ class NexusFile(Metadata):
                                       polarization_efficiency=polarization_efficiency
                                     )
 
+    @property
+    def rois(self) -> dict[str, tuple]:
+        return {}
+
+
 
 def relative_to_full_path(dat_file_path, rel_path)->str:
     base_path = os.path.dirname(dat_file_path)
@@ -470,6 +475,7 @@ class ScanDataFile(Metadata):
         """
         Returns the experiment for orso file.
         """
+        if self.sample_override: return self.sample_override
         sample = {key.split('_')[1]: value
                   for key, value in self.metadata['Sample and alignment'].items()}
 
@@ -491,6 +497,7 @@ class ScanDataFile(Metadata):
         """
             Returns the Slits positions
         """
+        if self.slit_override: return self.slit_override
         slit1_name, slit2_name = SLIT_DEVICES
         values = self.metadata['Device positions and sample environment state']
         return SlitData(slit1_width=float(values.get(f'{slit2_name}_value').split()[2]),
@@ -499,6 +506,7 @@ class ScanDataFile(Metadata):
                         slit2_position=float(values.get(f'd_{slit2_name}_value').split()[0]),
                         units=values.get(f'd_{slit1_name}_value').split()[1]
                         )
+
 
     def instrument_settings(self, polarisation: PolarizationEnum) -> InstrumentSettingsData:
         """
@@ -528,6 +536,26 @@ class ScanDataFile(Metadata):
         """
         return MeasurementData(instrument_settings=self.instrument_settings(polarisation),
                            data_files=self.metadata['General']['filepath'])
+
+    @property
+    def rois(self) -> dict[str, tuple]:
+        rois_dict = {}
+        if 'Device positions and sample environment state' in self.metadata:
+            for key, val in self.metadata['Device positions and sample environment state'].items():
+                if key.endswith('_roi'):
+                    try:
+                        parsed = ast.literal_eval(val)
+                        if isinstance(parsed, tuple) and len(parsed) == 4:
+                            name = key[:-4] if key.endswith('_roi') else key # wait, if key is 'center_roi_roi', we want 'center_roi'
+                            if key.endswith('_roi_roi'):
+                                name = key[:-4]
+                            else:
+                                name = key
+                            rois_dict[name] = parsed
+                    except Exception:
+                        pass
+        return rois_dict
+
 
 
 def get_data(file_path: str) -> Metadata:

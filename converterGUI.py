@@ -14,8 +14,12 @@ try:
     import customtkinter as ctk
     from PIL import Image
     import matplotlib.pyplot as plt
+    import matplotlib.colors as mcolors
+    import matplotlib.patches as patches
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
     from matplotlib.figure import Figure
+    from matplotlib.widgets import RectangleSelector
+
 except ImportError as e:
     print(f"Error: Failed to import GUI dependencies: {e}", file=sys.stderr)
     print("Please ensure 'python3-tk' is installed on your system (e.g., 'sudo apt install python3-tk').", file=sys.stderr)
@@ -136,6 +140,21 @@ class ConverterApp(ctk.CTk):
         self.status_var = ctk.StringVar(value="Ready")
         self.log_scale_var = ctk.BooleanVar(value=True)
         
+        self.slider_var = ctk.DoubleVar(value=0)
+        self.log_scale_2d_var = ctk.BooleanVar(value=False)
+        self.binary_mode_var = ctk.BooleanVar(value=False)
+        self.current_frame_index = 0
+        self.cbar = None
+
+        self.meta_vars = {
+            'sample_name': ctk.StringVar(),
+            'sample_length': ctk.StringVar(),
+            'slit1_width': ctk.StringVar(),
+            'slit1_position': ctk.StringVar(),
+            'slit2_width': ctk.StringVar(),
+            'slit2_position': ctk.StringVar()
+        }
+        
         self.columnconfigure(1, weight=1)
         self.rowconfigure(0, weight=1)
 
@@ -226,6 +245,8 @@ class ConverterApp(ctk.CTk):
         out_btn = ctk.CTkButton(self.output_folder_frame, text="...", width=30, command=self.select_output_folder)
         out_btn.pack(side="right", padx=(5,0))
         self.widgets['output_folder_button'] = out_btn
+
+        self.create_override_section()
 
         # Config Sections
         self.create_config_section("Data Source", self.config_data.source, DataSourceConfig, "source")
@@ -441,6 +462,62 @@ class ConverterApp(ctk.CTk):
                         self.region_labels['y'].configure(text=f"Y Range (Max: {ymax})")
         except Exception as e:
             print(f"Error getting 2D limits: {e}")
+
+    def create_override_section(self):
+        ctk.CTkLabel(self.scrollable_frame, text="Metadata Overrides", font=("Arial", 14, "bold")).pack(pady=(20, 5), anchor="w")
+        
+        section_frame = ctk.CTkFrame(self.scrollable_frame)
+        section_frame.pack(fill="x", pady=5)
+        
+        def add_field(label_text, var_name):
+            row = ctk.CTkFrame(section_frame, fg_color="transparent")
+            row.pack(fill="x", pady=2)
+            ctk.CTkLabel(row, text=label_text, width=150, anchor="w").pack(side="left", padx=5)
+            entry = ctk.CTkEntry(row, textvariable=self.meta_vars[var_name])
+            entry.pack(side="left", fill="x", expand=True)
+            entry.bind("<FocusOut>", self.on_meta_change)
+            entry.bind("<Return>", self.on_meta_change)
+
+        add_field("Sample Name", 'sample_name')
+        add_field("Sample Length", 'sample_length')
+        add_field("Slit 1 Width", 'slit1_width')
+        add_field("Slit 1 Pos", 'slit1_position')
+        add_field("Slit 2 Width", 'slit2_width')
+        add_field("Slit 2 Pos", 'slit2_position')
+        
+    def on_meta_change(self, *args):
+        if not self.data_object:
+            return
+            
+        try:
+            import copy
+            # Update sample override
+            orig_sample = self.data_object.sample
+            if orig_sample:
+                new_sample = copy.copy(orig_sample)
+                new_sample.name = self.meta_vars['sample_name'].get()
+                try:
+                    new_sample.length = float(self.meta_vars['sample_length'].get())
+                except ValueError:
+                    pass
+                self.data_object.sample_override = new_sample
+                
+            # Update slit override
+            orig_slit = self.data_object.slit_configuration
+            if orig_slit:
+                new_slit = copy.copy(orig_slit)
+                try:
+                    new_slit.slit1_width = float(self.meta_vars['slit1_width'].get())
+                    new_slit.slit1_position = float(self.meta_vars['slit1_position'].get())
+                    new_slit.slit2_width = float(self.meta_vars['slit2_width'].get())
+                    new_slit.slit2_position = float(self.meta_vars['slit2_position'].get())
+                except ValueError:
+                    pass
+                self.data_object.slit_override = new_slit
+                
+            self.on_parameter_change()
+        except Exception as e:
+            print(f"Error updating metadata overrides: {e}")
 
     def create_config_section(self, title, config_obj, config_cls, prefix):
         ctk.CTkLabel(self.scrollable_frame, text=title, font=("Arial", 14, "bold")).pack(pady=(20, 5), anchor="w")
@@ -682,6 +759,22 @@ class ConverterApp(ctk.CTk):
                 
                 # Update detector list
                 if self.data_object:
+                    try:
+                        sample = self.data_object.sample
+                        self.meta_vars['sample_name'].set(str(sample.name) if sample.name else "")
+                        self.meta_vars['sample_length'].set(str(sample.length) if sample.length else "")
+                    except Exception as e:
+                        print("Error loading sample metadata:", e)
+                        
+                    try:
+                        slits = self.data_object.slit_configuration
+                        self.meta_vars['slit1_width'].set(str(slits.slit1_width))
+                        self.meta_vars['slit1_position'].set(str(slits.slit1_position))
+                        self.meta_vars['slit2_width'].set(str(slits.slit2_width))
+                        self.meta_vars['slit2_position'].set(str(slits.slit2_position))
+                    except Exception as e:
+                        print("Error loading slit metadata:", e)
+
                     detectors = self.data_object.detectors_list
                     if 'source_detector' in self.widgets:
                         widget = self.widgets['source_detector']
@@ -714,10 +807,16 @@ class ConverterApp(ctk.CTk):
         self.on_parameter_change()
 
     def build_main_area(self):
-        # Main area only contains plot now
-        self.build_plot()
+        self.tabview = ctk.CTkTabview(self.main_area)
+        self.tabview.pack(fill="both", expand=True)
+        
+        self.tab_1d = self.tabview.add("1D Reflectivity")
+        self.tab_2d = self.tabview.add("2D Data Viewer")
+        
+        self.build_plot(self.tab_1d)
+        self.build_2d_plot(self.tab_2d)
 
-    def build_plot(self):
+    def build_plot(self, parent):
         self.figure = Figure(figsize=(5, 4), dpi=100)
         self.ax = self.figure.add_subplot(111)
         self.ax.set_title("Reflectivity")
@@ -726,7 +825,7 @@ class ConverterApp(ctk.CTk):
         self.ax.grid(True)
         
         # Frame for canvas and toolbar
-        plot_container = ctk.CTkFrame(self.main_area, fg_color="white")
+        plot_container = ctk.CTkFrame(parent, fg_color="white")
         plot_container.pack(fill="both", expand=True)
         toolbar_frame = ctk.CTkFrame(plot_container)
         toolbar_frame.pack(fill="x")
@@ -741,6 +840,117 @@ class ConverterApp(ctk.CTk):
         
         # Log scale switch
         ctk.CTkCheckBox(toolbar, text="Log Scale", variable=self.log_scale_var, command=self.on_parameter_change).pack(side="right", padx=10)
+
+    def build_2d_plot(self, parent):
+        self.figure_2d = Figure(figsize=(5, 4), dpi=100)
+        self.ax_2d = self.figure_2d.add_axes([0.1, 0.1, 0.75, 0.8])
+        self.cbar_ax = self.figure_2d.add_axes([0.88, 0.1, 0.04, 0.8])
+        self.ax_2d.set_title("2D Data")
+
+        
+        plot_container = ctk.CTkFrame(parent, fg_color="white")
+        plot_container.pack(fill="both", expand=True)
+        
+        toolbar_frame = ctk.CTkFrame(plot_container)
+        toolbar_frame.pack(fill="x")
+        
+        self.canvas_2d = FigureCanvasTkAgg(self.figure_2d, master=plot_container)
+        self.canvas_2d.draw()
+        self.canvas_2d.get_tk_widget().pack(fill="both", expand=True)
+        
+        toolbar = NavigationToolbar2Tk(self.canvas_2d, toolbar_frame)
+        toolbar.update()
+        
+        controls_frame = ctk.CTkFrame(toolbar_frame, fg_color="transparent")
+        controls_frame.pack(side="right", padx=10)
+        
+        ctk.CTkLabel(controls_frame, text="Frame:").pack(side="left", padx=5)
+        self.slider_2d = ctk.CTkSlider(controls_frame, from_=0, to=1, number_of_steps=1, variable=self.slider_var, command=self.on_slider_change)
+        self.slider_2d.pack(side="left", padx=5)
+        
+        ctk.CTkCheckBox(controls_frame, text="Log Scale", variable=self.log_scale_2d_var, command=self.update_2d_plot).pack(side="left", padx=5)
+        ctk.CTkCheckBox(controls_frame, text="Binary", variable=self.binary_mode_var, command=self.update_2d_plot).pack(side="left", padx=5)
+
+        self.rs = RectangleSelector(self.ax_2d, self.on_rectangle_select,
+                                    useblit=True,
+                                    button=[1],  # left mouse button
+                                    minspanx=5, minspany=5,
+                                    spancoords='pixels',
+                                    interactive=True)
+
+    def on_slider_change(self, value):
+        self.current_frame_index = int(value)
+        self.update_2d_plot()
+
+    def on_rectangle_select(self, eclick, erelease):
+        x1, y1 = eclick.xdata, eclick.ydata
+        x2, y2 = erelease.xdata, erelease.ydata
+        xmin, xmax = int(min(x1, x2)), int(max(x1, x2))
+        ymin, ymax = int(min(y1, y2)), int(max(y1, y2))
+        
+        if 'xmin' in self.region_vars:
+            self.region_vars['xmin'].set(xmin)
+            self.region_vars['xmax'].set(xmax)
+            self.region_vars['ymin'].set(ymin)
+            self.region_vars['ymax'].set(ymax)
+            
+            if 'source_detector' in self.inputs:
+                self.inputs['source_detector'][0].set('2Ddata')
+            
+            self.on_parameter_change()
+
+    def update_2d_plot(self, *args):
+        if not self.data_object:
+            return
+        if '2Ddata' not in self.data_object.detectors_list:
+            return
+            
+        pols = self.data_object.polarisation
+        pol = pols[0] if pols else PolarizationEnum.unpolarized
+        try:
+            data = self.data_object.get_dataset('2Ddata', pol)
+        except Exception:
+            return
+            
+        if data.ndim < 3:
+            return
+            
+        num_frames = data.shape[0]
+        safe_to = max(1, num_frames - 1)
+        self.slider_2d.configure(to=safe_to, number_of_steps=safe_to)
+        
+        if self.current_frame_index >= num_frames:
+            self.current_frame_index = num_frames - 1
+            
+        frame_data = data[self.current_frame_index]
+        
+        if self.binary_mode_var.get():
+            frame_data = (frame_data > 0).astype(float)
+            
+        self.ax_2d.clear()
+        self.cbar_ax.clear()
+        self.ax_2d.set_title(f"2D Data - Frame {self.current_frame_index}")
+        
+        norm = mcolors.LogNorm() if self.log_scale_2d_var.get() and not self.binary_mode_var.get() else None
+        
+        im = self.ax_2d.imshow(frame_data, cmap='viridis', norm=norm, origin='lower')
+        self.cbar = self.figure_2d.colorbar(im, cax=self.cbar_ax)
+
+        # Draw predefined ROIs
+        rois = self.data_object.rois
+        colors = ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow']
+        for i, (name, rect) in enumerate(rois.items()):
+            try:
+                xmin, ymin, width, height = rect
+                color = colors[i % len(colors)]
+                p = patches.Rectangle((xmin, ymin), width, height, fill=False, edgecolor=color, linewidth=2)
+                self.ax_2d.add_patch(p)
+                self.ax_2d.text(xmin, ymin - 5, name, color=color, fontsize=8, weight='bold')
+            except Exception:
+                pass
+                
+        self.canvas_2d.draw()
+
 
     def update_config_from_ui(self):
         self.config_data.output_name = self.inputs['output_name'][0].get()
@@ -883,6 +1093,7 @@ class ConverterApp(ctk.CTk):
             return
 
         try:
+            self.update_2d_plot()
             parameters = self.get_parameters()
             converter = MadeConversion(self.data_object, parameters)
             results = converter.result
