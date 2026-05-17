@@ -864,12 +864,18 @@ class ConverterApp(ctk.CTk):
         controls_frame = ctk.CTkFrame(toolbar_frame, fg_color="transparent")
         controls_frame.pack(side="right", padx=10)
         
-        ctk.CTkLabel(controls_frame, text="Frame:").pack(side="left", padx=5)
-        self.slider_2d = ctk.CTkSlider(controls_frame, from_=0, to=1, number_of_steps=1, variable=self.slider_var, command=self.on_slider_change)
-        self.slider_2d.pack(side="left", padx=5)
+        self.btn_prev = ctk.CTkButton(controls_frame, text="<", width=30, command=self.on_prev_frame)
+        self.btn_prev.pack(side="left", padx=2)
         
-        ctk.CTkCheckBox(controls_frame, text="Log Scale", variable=self.log_scale_2d_var, command=self.update_2d_plot).pack(side="left", padx=5)
-        ctk.CTkCheckBox(controls_frame, text="Binary", variable=self.binary_mode_var, command=self.update_2d_plot).pack(side="left", padx=5)
+        ctk.CTkLabel(controls_frame, text="Frame:").pack(side="left", padx=2)
+        self.slider_2d = ctk.CTkSlider(controls_frame, from_=0, to=1, number_of_steps=1, variable=self.slider_var, command=self.on_slider_change)
+        self.slider_2d.pack(side="left", padx=2)
+        
+        self.btn_next = ctk.CTkButton(controls_frame, text=">", width=30, command=self.on_next_frame)
+        self.btn_next.pack(side="left", padx=2)
+        
+        ctk.CTkCheckBox(controls_frame, text="Log Scale", variable=self.log_scale_2d_var, command=lambda: self.update_2d_plot(force_redraw=True)).pack(side="left", padx=5)
+        ctk.CTkCheckBox(controls_frame, text="Binary", variable=self.binary_mode_var, command=lambda: self.update_2d_plot(force_redraw=True)).pack(side="left", padx=5)
 
         self.rs = RectangleSelector(self.ax_2d, self.on_rectangle_select,
                                     useblit=True,
@@ -877,6 +883,25 @@ class ConverterApp(ctk.CTk):
                                     minspanx=5, minspany=5,
                                     spancoords='pixels',
                                     interactive=True)
+
+        self.bind("<Left>", lambda e: self.on_prev_frame())
+        self.bind("<Right>", lambda e: self.on_next_frame())
+        self.custom_roi_patch = None
+        self._cached_2d_data = None
+        self._cached_pol = None
+        self._cached_file = None
+
+    def on_prev_frame(self):
+        val = self.slider_var.get()
+        if val > 0:
+            self.slider_var.set(val - 1)
+            self.on_slider_change(val - 1)
+
+    def on_next_frame(self):
+        val = self.slider_var.get()
+        if val < self.slider_2d.cget("to"):
+            self.slider_var.set(val + 1)
+            self.on_slider_change(val + 1)
 
     def on_slider_change(self, value):
         self.current_frame_index = int(value)
@@ -899,7 +924,7 @@ class ConverterApp(ctk.CTk):
             
             self.on_parameter_change()
 
-    def update_2d_plot(self, *args):
+    def update_2d_plot(self, *args, force_redraw=False):
         if not self.data_object:
             return
         if '2Ddata' not in self.data_object.detectors_list:
@@ -907,11 +932,17 @@ class ConverterApp(ctk.CTk):
             
         pols = self.data_object.polarisation
         pol = pols[0] if pols else PolarizationEnum.unpolarized
-        try:
-            data = self.data_object.get_dataset('2Ddata', pol)
-        except Exception:
-            return
-            
+        
+        if self._cached_2d_data is None or self._cached_pol != pol or self._cached_file != self.input_file:
+            try:
+                self._cached_2d_data = self.data_object.get_dataset('2Ddata', pol)
+                self._cached_pol = pol
+                self._cached_file = self.input_file
+                force_redraw = True
+            except Exception:
+                return
+                
+        data = self._cached_2d_data
         if data.ndim < 3:
             return
             
@@ -923,33 +954,77 @@ class ConverterApp(ctk.CTk):
             self.current_frame_index = num_frames - 1
             
         frame_data = data[self.current_frame_index]
-        
         if self.binary_mode_var.get():
             frame_data = (frame_data > 0).astype(float)
             
-        self.ax_2d.clear()
-        self.cbar_ax.clear()
-        self.ax_2d.set_title(f"2D Data - Frame {self.current_frame_index}")
-        
+        title = f"2D Data - Frame {self.current_frame_index}"
+        try:
+            df = self.data_object.dataset
+            from converter.utils import POLARISATION_STATES, get_indexes
+            if pol == PolarizationEnum.unpolarized:
+                orig_index = self.current_frame_index
+            else:
+                flippers_data = self.data_object.flippers_data
+                filter_value = [POLARISATION_STATES.get(symbol) for symbol in pol.value if symbol != 'o']
+                filter_data = get_indexes(flippers_data, filter_value)
+                valid_indices = np.where(filter_data)[0]
+                orig_index = valid_indices[self.current_frame_index]
+                
+            row = df.iloc[orig_index]
+            extras = []
+            if 'theta' in row: extras.append(f"th: {float(row['theta']):.2f}")
+            if 'twotheta' in row: extras.append(f"2th: {float(row['twotheta']):.2f}")
+            for flip in ['flipper_1', 'flipper_2']:
+                if flip in row: extras.append(f"{flip.replace('flipper_','F')}: {row[flip]}")
+            if extras:
+                title += " | " + " ".join(extras)
+        except Exception:
+            pass
+
         norm = mcolors.LogNorm() if self.log_scale_2d_var.get() and not self.binary_mode_var.get() else None
         
-        im = self.ax_2d.imshow(frame_data, cmap='viridis', norm=norm, origin='lower')
-        self.cbar = self.figure_2d.colorbar(im, cax=self.cbar_ax)
+        if force_redraw or not hasattr(self, 'im_2d') or not self.im_2d or self.im_2d.axes != self.ax_2d:
+            self.ax_2d.clear()
+            self.cbar_ax.clear()
+            
+            self.im_2d = self.ax_2d.imshow(frame_data, cmap='viridis', norm=norm, origin='lower')
+            self.cbar = self.figure_2d.colorbar(self.im_2d, cax=self.cbar_ax)
 
-        # Draw predefined ROIs
-        rois = self.data_object.rois
-        colors = ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow']
-        for i, (name, rect) in enumerate(rois.items()):
-            try:
-                xmin, ymin, width, height = rect
-                color = colors[i % len(colors)]
-                p = patches.Rectangle((xmin, ymin), width, height, fill=False, edgecolor=color, linewidth=2)
-                self.ax_2d.add_patch(p)
-                self.ax_2d.text(xmin, ymin - 5, name, color=color, fontsize=8, weight='bold')
-            except Exception:
-                pass
-                
-        self.canvas_2d.draw()
+            # Draw predefined ROIs
+            rois = self.data_object.rois
+            colors = ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow']
+            for i, (name, rect) in enumerate(rois.items()):
+                try:
+                    xmin, ymin, width, height = rect
+                    color = colors[i % len(colors)]
+                    p = patches.Rectangle((xmin, ymin), width, height, fill=False, edgecolor=color, linewidth=2)
+                    self.ax_2d.add_patch(p)
+                    self.ax_2d.text(xmin, ymin - 5, name, color=color, fontsize=8, weight='bold')
+                except Exception:
+                    pass
+            
+            # Sync custom ROI
+            if self.config_data.source.region and len(self.config_data.source.region) >= 4:
+                try:
+                    ymin, ymax, xmin, xmax = self.config_data.source.region
+                    if getattr(self, 'rs', None):
+                        self.rs.extents = (xmin, xmax, ymin, ymax)
+                except Exception:
+                    pass
+        else:
+            self.im_2d.set_data(frame_data)
+            self.im_2d.set_norm(norm)
+            self.cbar.update_normal(self.im_2d)
+            if self.config_data.source.region and len(self.config_data.source.region) >= 4:
+                try:
+                    ymin, ymax, xmin, xmax = self.config_data.source.region
+                    if getattr(self, 'rs', None):
+                        self.rs.extents = (xmin, xmax, ymin, ymax)
+                except Exception:
+                    pass
+
+        self.ax_2d.set_title(title)
+        self.canvas_2d.draw_idle()
 
 
     def update_config_from_ui(self):

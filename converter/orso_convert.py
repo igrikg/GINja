@@ -112,6 +112,14 @@ class OrsoData:
         ]
 
     @property
+    def columns_theta(self):
+        return [
+            Column(name="theta", unit="deg"),
+            Column(name="R"),
+            ErrorColumn(error_of="R"),
+        ]
+
+    @property
     def orso_dataset(self):
         res = []
         for dataset in self.__data:
@@ -123,8 +131,21 @@ class OrsoData:
                                                      dataset.result.R, dataset.result.dR]).T))
         return res
 
+    @property
+    def orso_dataset_theta(self):
+        res = []
+        for dataset in self.__data:
+            data_source = DataSource(
+                *get_header_orso(dataset.header),
+                get_measurement_orso(dataset.measurement))
+            header = Orso(data_source, self.reduction, self.columns_theta)
+            res.append(OrsoDataset(header, np.array([dataset.theta,
+                                                     dataset.result.R, dataset.result.dR]).T))
+        return res
+
     def save(self, filename):
         save_orso(self.orso_dataset, f"{filename}.ort")
+        save_orso(self.orso_dataset_theta, f"{filename}_theta.ort")
 
 
 
