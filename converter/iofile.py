@@ -5,9 +5,9 @@ import numpy as np
 import pandas as pd
 
 from PIL import Image
-from typing import Iterable
-from datetime import datetime
-from collections import defaultdict
+import typing
+import datetime
+import collections
 import nexusformat.nexus.tree as nx
 from nexusformat.nexus import nxload
 
@@ -151,7 +151,7 @@ class NexusFile(Metadata):
         """
             Returns the owner of file.
         """
-        def filter_user(role: str, users_list: Iterable) -> list:
+        def filter_user(role: str, users_list: typing.Iterable) -> list:
             return list(filter(lambda item: item.role == role, users_list))
         users = self.entry.NXuser
         user = filter_user('principal_investigator', users)
@@ -165,7 +165,7 @@ class NexusFile(Metadata):
         """
         return ExperimentData(title=self.entry.get('title')[0],
                           instrument=self.instrument_name,
-                          start_date=datetime.strptime(str(self.entry.get('start_time')[0]),
+                          start_date=datetime.datetime.strptime(str(self.entry.get('start_time')[0]),
                                                        "%Y-%m-%d %H:%M:%S.%f"),
                           proposalID=str(self.entry.get('proposal_id')[0])
                           )
@@ -249,7 +249,7 @@ class ScanDataReader:
 
     def __init__(self, file_path: str):
         self.file_path = file_path
-        self.metadata = defaultdict(dict)
+        self.metadata = collections.defaultdict(dict)
         self.header = []
         self.header_units = []
         self.df = pd.DataFrame()
@@ -447,7 +447,7 @@ class ScanDataFile(Metadata):
         users_str = self.metadata['Experiment information']['Exp_users']
         if '{' in users_str and '}' in users_str:
             users_str = ast.literal_eval(users_str)
-            if isinstance(users_str, Iterable) and not isinstance(users_str, str):
+            if isinstance(users_str, typing.Iterable) and not isinstance(users_str, str):
                 user = users_str[0] if isinstance(users_str, (list, tuple)) else users_str
             else:
                 user = users_str
@@ -463,7 +463,7 @@ class ScanDataFile(Metadata):
         instrument_setup = {key.split('_')[1]: value for key, value in self.metadata['Instrument setup'].items()}
         return ExperimentData(title=self.metadata['Experiment information']['Exp_title'],
                               instrument=instrument_setup['instrument'],
-                              start_date=datetime.strptime(self.metadata['General']['Date'],
+                              start_date=datetime.datetime.strptime(self.metadata['General']['Date'],
                                                            "%Y-%m-%d %H:%M:%S"),
                               proposalID=str(self.metadata['Experiment information']['Exp_proposal']),
                               doi=instrument_setup['doi'],
@@ -479,18 +479,18 @@ class ScanDataFile(Metadata):
         sample = {key.split('_')[1]: value
                   for key, value in self.metadata['Sample and alignment'].items()}
 
-        sample2 = get_sample_from_str(sample['samples'],
-                                      sample['samplename'])
-        return sample2
+        #sample2 = get_sample_from_str(sample['samples'],
+        #                              sample['samplename']) # if sample wrong
+        #return sample2
 
-        #return SampleData(name=sample['samplename'],
-        #                  category=sample['category'],
-        #                  composition=sample['composition'],
-        #                  description=sample['description'],
-        #                  length=float(sample['length']),
-        #                  height=float(sample['height']),
-        #                  thickness=float(sample['thickness'])
-        #                  )
+        return SampleData(name=sample['samplename'],
+                          category=sample['category'],
+                          composition=sample['composition'],
+                          description=sample['description'],
+                          length=float(sample['length']),
+                          height=float(sample['height']),
+                          thickness=float(sample['thickness'])
+                          )
 
     @property
     def slit_configuration(self) -> SlitData:
@@ -500,7 +500,7 @@ class ScanDataFile(Metadata):
         if self.slit_override: return self.slit_override
         slit1_name, slit2_name = SLIT_DEVICES
         values = self.metadata['Device positions and sample environment state']
-        return SlitData(slit1_width=float(values.get(f'{slit2_name}_value').split()[2]),
+        return SlitData(slit1_width=float(values.get(f'{slit1_name}_value').split()[2]),
                         slit1_position=float(values.get(f'd_{slit1_name}_value').split()[0]),
                         slit2_width=float(values.get(f'{slit2_name}_value').split()[2]),
                         slit2_position=float(values.get(f'd_{slit2_name}_value').split()[0]),
