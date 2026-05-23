@@ -76,7 +76,7 @@ class DataReduction:
                                  )
         for polarisation in self.__data.polarisation:
             measurement = self.__data.measurement(polarisation)
-            theta = self.__data.get_dataset('theta', polarisation)
+            theta = self.__data.get_dataset('theta', polarisation) + self.__parameters.reduction.theta_offset
             counts, background, e_counts, e_background = self.__get_detector_data(polarisation)
             monitor = self.__data.get_dataset_monitor(polarisation)
             time = self.__data.get_dataset_time(polarisation)

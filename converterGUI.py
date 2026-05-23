@@ -139,6 +139,8 @@ class ConverterApp(ctk.CTk):
         self.auto_update_var = ctk.BooleanVar(value=True) # Always true
         self.status_var = ctk.StringVar(value="Ready")
         self.log_scale_var = ctk.BooleanVar(value=True)
+        self.x_axis_mode_var = ctk.StringVar(value="Q")
+        self.roi_visibility_vars = {}
         
         self.slider_var = ctk.DoubleVar(value=0)
         self.log_scale_2d_var = ctk.BooleanVar(value=False)
@@ -174,6 +176,7 @@ class ConverterApp(ctk.CTk):
 
         self.build_sidebar()
         self.build_main_area()
+        self.build_roi_visibility_ui()
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def on_close(self):
@@ -247,6 +250,11 @@ class ConverterApp(ctk.CTk):
         self.widgets['output_folder_button'] = out_btn
 
         self.create_override_section()
+
+        # ROI visibility frame
+        self.roi_visibility_frame = ctk.CTkFrame(self.scrollable_frame)
+        self.roi_visibility_frame.pack(fill="x", pady=5)
+        self.widgets['roi_visibility_frame'] = self.roi_visibility_frame
 
         # Config Sections
         self.create_config_section("Data Source", self.config_data.source, DataSourceConfig, "source")
@@ -784,8 +792,18 @@ class ConverterApp(ctk.CTk):
                             if current not in detectors and detectors:
                                 self.inputs['source_detector'][0].set(detectors[0])
 
+                    # Hide or show 2D tab dynamically
+                    if '2Ddata' in detectors:
+                        if "2D Data Viewer" not in self.tabview._tab_dict:
+                            tab_2d = self.tabview.add("2D Data Viewer")
+                            self.build_2d_plot(tab_2d)
+                    else:
+                        if "2D Data Viewer" in self.tabview._tab_dict:
+                            self.tabview.delete("2D Data Viewer")
+
                 self.status_var.set("File loaded")
                 self.on_parameter_change()
+                self.build_roi_visibility_ui()
             except Exception as e:
                 print(f"Error loading file: {e}")
                 self.status_var.set("Error loading file")
@@ -796,6 +814,33 @@ class ConverterApp(ctk.CTk):
         if file_path:
             self.inputs['bg_file'][0].set(file_path)
             self.on_parameter_change()
+
+    def build_roi_visibility_ui(self):
+        if not hasattr(self, 'roi_visibility_frame'):
+            return
+            
+        # Clear existing children
+        for widget in self.roi_visibility_frame.winfo_children():
+            widget.destroy()
+            
+        # Title
+        ctk.CTkLabel(self.roi_visibility_frame, text="ROI Visibility Settings", font=("Arial", 12, "bold")).pack(anchor="w", padx=10, pady=(5, 2))
+        
+        self.roi_visibility_vars = {}
+        
+        # Checkbox for Custom Selection
+        var_custom = ctk.BooleanVar(value=True)
+        self.roi_visibility_vars["Custom Selection"] = var_custom
+        cb_custom = ctk.CTkCheckBox(self.roi_visibility_frame, text="Custom Selection", variable=var_custom, command=lambda: self.update_2d_plot(force_redraw=True))
+        cb_custom.pack(anchor="w", padx=15, pady=2)
+        
+        # Predefined ROIs from data_object
+        rois = getattr(self.data_object, 'rois', {}) if self.data_object else {}
+        for name in rois.keys():
+            var = ctk.BooleanVar(value=True)
+            self.roi_visibility_vars[name] = var
+            cb = ctk.CTkCheckBox(self.roi_visibility_frame, text=name, variable=var, command=lambda: self.update_2d_plot(force_redraw=True))
+            cb.pack(anchor="w", padx=15, pady=2)
 
     def select_output_folder(self):
         path = tkinter.filedialog.askdirectory()
@@ -840,6 +885,11 @@ class ConverterApp(ctk.CTk):
         
         # Log scale switch
         ctk.CTkCheckBox(toolbar, text="Log Scale", variable=self.log_scale_var, command=self.on_parameter_change).pack(side="right", padx=10)
+        
+        # X-Axis metric switch
+        x_axis_menu = ctk.CTkOptionMenu(toolbar, variable=self.x_axis_mode_var, values=["Q", "Theta"], width=80, command=self.on_parameter_change)
+        x_axis_menu.pack(side="right", padx=5)
+        ctk.CTkLabel(toolbar, text="X-Axis:").pack(side="right", padx=(10, 2))
 
     def build_2d_plot(self, parent):
         self.figure_2d = Figure(figsize=(5, 4), dpi=100)
@@ -959,7 +1009,6 @@ class ConverterApp(ctk.CTk):
             
         title = f"2D Data - Frame {self.current_frame_index}"
         try:
-            df = self.data_object.dataset
             from converter.utils import POLARISATION_STATES, get_indexes
             if pol == PolarizationEnum.unpolarized:
                 orig_index = self.current_frame_index
@@ -970,16 +1019,34 @@ class ConverterApp(ctk.CTk):
                 valid_indices = np.where(filter_data)[0]
                 orig_index = valid_indices[self.current_frame_index]
                 
-            row = df.iloc[orig_index]
             extras = []
-            if 'theta' in row: extras.append(f"th: {float(row['theta']):.2f}")
-            if 'twotheta' in row: extras.append(f"2th: {float(row['twotheta']):.2f}")
-            for flip in ['flipper_1', 'flipper_2']:
-                if flip in row: extras.append(f"{flip.replace('flipper_','F')}: {row[flip]}")
+            if hasattr(self.data_object, 'dataset'):
+                row = self.data_object.dataset.iloc[orig_index]
+                if 'theta' in row: extras.append(f"th: {float(row['theta']):.2f}")
+                if 'twotheta' in row: extras.append(f"2th: {float(row['twotheta']):.2f}")
+                for flip in ['flipper_1', 'flipper_2']:
+                    if flip in row: extras.append(f"{flip.replace('flipper_','F')}: {row[flip]}")
+            elif hasattr(self.data_object, 'nxdata'):
+                nxdata = self.data_object.nxdata
+                for name, label in [('theta', 'th'), ('twotheta', '2th')]:
+                    val_obj = nxdata.get(name)
+                    if val_obj is not None:
+                        val_arr = np.asarray(val_obj.nxdata)
+                        if orig_index < len(val_arr):
+                            extras.append(f"{label}: {float(val_arr[orig_index]):.2f}")
+                for flip in ['flipper_1', 'flipper_2']:
+                    val_obj = nxdata.get(flip)
+                    if val_obj is not None:
+                        val_arr = np.asarray(val_obj.nxdata)
+                        if orig_index < len(val_arr):
+                            val = val_arr[orig_index]
+                            if isinstance(val, bytes):
+                                val = val.decode('utf-8')
+                            extras.append(f"{flip.replace('flipper_','F')}: {val}")
             if extras:
                 title += " | " + " ".join(extras)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Error extracting metadata for 2D plot title: {e}")
 
         norm = mcolors.LogNorm() if self.log_scale_2d_var.get() and not self.binary_mode_var.get() else None
         
@@ -994,6 +1061,9 @@ class ConverterApp(ctk.CTk):
             rois = self.data_object.rois
             colors = ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow']
             for i, (name, rect) in enumerate(rois.items()):
+                show_roi = self.roi_visibility_vars.get(name, ctk.BooleanVar(value=True)).get()
+                if not show_roi:
+                    continue
                 try:
                     xmin, ymin, width, height = rect
                     color = colors[i % len(colors)]
@@ -1004,7 +1074,11 @@ class ConverterApp(ctk.CTk):
                     pass
             
             # Sync custom ROI
-            if self.config_data.source.region and len(self.config_data.source.region) >= 4:
+            show_custom = self.roi_visibility_vars.get("Custom Selection", ctk.BooleanVar(value=True)).get()
+            if getattr(self, 'rs', None):
+                self.rs.set_visible(show_custom)
+                self.rs.set_active(show_custom)
+            if show_custom and self.config_data.source.region and len(self.config_data.source.region) >= 4:
                 try:
                     ymin, ymax, xmin, xmax = self.config_data.source.region
                     if getattr(self, 'rs', None):
@@ -1015,7 +1089,11 @@ class ConverterApp(ctk.CTk):
             self.im_2d.set_data(frame_data)
             self.im_2d.set_norm(norm)
             self.cbar.update_normal(self.im_2d)
-            if self.config_data.source.region and len(self.config_data.source.region) >= 4:
+            show_custom = self.roi_visibility_vars.get("Custom Selection", ctk.BooleanVar(value=True)).get()
+            if getattr(self, 'rs', None):
+                self.rs.set_visible(show_custom)
+                self.rs.set_active(show_custom)
+            if show_custom and self.config_data.source.region and len(self.config_data.source.region) >= 4:
                 try:
                     ymin, ymax, xmin, xmax = self.config_data.source.region
                     if getattr(self, 'rs', None):
@@ -1127,8 +1205,19 @@ class ConverterApp(ctk.CTk):
         self.figure.clf()
         ax = self.figure.add_subplot(111)
         
+        x_mode = self.x_axis_mode_var.get()
+        xlabel = "Q ($Å^{-1}$)"
+        
         for ds in datasets:
-            q = ds.result.Q
+            if x_mode == "Q":
+                x = ds.result.Q
+                xerr = None #ds.result.dQ
+                xlabel = "Q ($Å^{-1}$)"
+            else:
+                x = ds.theta
+                xerr = None
+                xlabel = "Theta (deg)"
+                
             r = ds.result.R
             dr = ds.result.dR
             
@@ -1139,10 +1228,10 @@ class ConverterApp(ctk.CTk):
             except:
                 pass
             
-            if q is not None and r is not None:
-                ax.errorbar(q, r, yerr=dr, fmt='.-', label=label, capsize=2)
+            if x is not None and r is not None:
+                ax.errorbar(x, r, xerr=xerr, yerr=None, fmt='.-', label=label, capsize=2)
         
-        ax.set_xlabel("Q ($Å^{-1}$)")
+        ax.set_xlabel(xlabel)
         ax.set_ylabel("R")
         scale_type = "log" if self.log_scale_var.get() else "linear"
         ax.set_yscale(scale_type)

@@ -430,7 +430,7 @@ def test_orso_data_save():
     
     with patch('converter.orso_convert.save_orso') as mock_save:
         orso_data.save("/tmp/test_output")
-        mock_save.assert_called_once()
+        assert mock_save.call_count == 2
 
 
 def test_orso_data_reduction_detector_with_region():
@@ -456,3 +456,20 @@ def test_orso_data_reduction_detector_no_region():
     reduction = orso_data.reduction
     
     assert "Collect intensity from detector1" in reduction.corrections[0]
+
+
+def test_orso_dataset_theta_with_polarizations():
+    dataset_po = create_mock_data_set(polarization=PolarizationEnum.po)
+    dataset_mo = create_mock_data_set(polarization=PolarizationEnum.mo)
+    parameters = create_mock_parameters()
+    orso_data = OrsoData([dataset_po, dataset_mo], parameters)
+    
+    datasets = orso_data.orso_dataset_theta
+    assert len(datasets) == 5
+    assert datasets[2].info.comment == "flipper ratio po/mo"
+    assert datasets[3].info.comment == "flipper ratio po/mo/100"
+    assert datasets[4].info.comment == "polarization asymmetry (po-mo)/(po+mo)*100"
+    
+    np.testing.assert_allclose(datasets[2].data[:, 1], np.array([1.0, 1.0, 1.0]))
+    np.testing.assert_allclose(datasets[3].data[:, 1], np.array([0.01, 0.01, 0.01]))
+    np.testing.assert_allclose(datasets[4].data[:, 1], np.array([0.0, 0.0, 0.0]))

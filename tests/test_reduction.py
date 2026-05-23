@@ -47,13 +47,14 @@ class MockBackground:
         self.value = value
 
 class MockReduction:
-    def __init__(self, foot_print_correction=False, absorption_correction=False, polarisation_correction=False, mu_type=AdsorptionTypeCorrection.constValue, mu_value=0, mu_enum=None):
+    def __init__(self, foot_print_correction=False, absorption_correction=False, polarisation_correction=False, mu_type=AdsorptionTypeCorrection.constValue, mu_value=0, mu_enum=None, theta_offset=0.0):
         self.foot_print_correction = foot_print_correction
         self.absorption_correction = absorption_correction
         self.polarisation_correction = polarisation_correction
         self.mu_type = mu_type
         self.mu_value = mu_value
         self.mu_enum = mu_enum
+        self.theta_offset = theta_offset
 
 class MockNormalisation:
     def __init__(self, monitor=False, time=False, intensity_norm=False, intensity_norm_type=IntensityTypeCorrection.constValue, intensity_value=1.0):
@@ -294,3 +295,11 @@ def test_create_orso_folder_input_file():
         mock_orso.return_value = mock_orso_instance
         reduction.create_orso(filename="custom_name", folder_input_file=True)
         mock_orso.assert_called_once()
+
+
+def test_data_reduction_theta_offset():
+    mock_metadata = MockMetadata(polarisation=["up"])
+    mock_reduction = MockReduction(theta_offset=0.05)
+    mock_parameters = MockCorrectionParameters(reduction=mock_reduction)
+    reduction = DataReduction(mock_metadata, mock_parameters)
+    assert np.allclose(reduction.data_list[0].theta, np.array([0.15, 0.25, 0.35]))

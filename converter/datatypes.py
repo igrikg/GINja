@@ -136,6 +136,7 @@ class ReductionConfig:
     mu_type: AdsorptionTypeCorrection = AdsorptionTypeCorrection.constValue
     mu_enum: MuDataEnum = MuDataEnum.glass
     mu_value: float = 0
+    theta_offset: float = 0.0
 
 
 @dataclass
