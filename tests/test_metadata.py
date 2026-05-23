@@ -100,6 +100,10 @@ class ConcreteMetadata(Metadata):
             slit2_position=100
         )
 
+    @property
+    def rois(self):
+        return {}
+
 
 def test_metadata_init():
     metadata = ConcreteMetadata()
@@ -261,6 +265,10 @@ def test_metadata_abstract_methods_raise_not_implemented():
         @property
         def slit_configuration(self):
             return Metadata.slit_configuration.fget(self)
+
+        @property
+        def rois(self):
+            return Metadata.rois.fget(self)
         
         def get_dataset_monitor(self, polarisation):
             return Metadata.get_dataset_monitor(self, polarisation)
@@ -323,3 +331,6 @@ def test_metadata_abstract_methods_raise_not_implemented():
     
     with pytest.raises(NotImplementedError):
         _ = test_meta.slit_configuration
+
+    with pytest.raises(NotImplementedError):
+        _ = test_meta.rois

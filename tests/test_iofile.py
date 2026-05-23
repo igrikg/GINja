@@ -14,11 +14,11 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
 class TestRelativeToFullPath:
     def test_relative_to_full_path(self):
         result = relative_to_full_path("/path/to/file.dat", "other.dat")
-        assert result == "/path/to/other.dat"
+        assert os.path.normpath(result) == os.path.normpath("/path/to/other.dat")
 
     def test_relative_to_full_path_with_subdir(self):
         result = relative_to_full_path("/path/to/file.dat", "subdir/other.dat")
-        assert result == "/path/to/subdir/other.dat"
+        assert os.path.normpath(result) == os.path.normpath("/path/to/subdir/other.dat")
 
 
 class TestLoadTiffPil:
@@ -28,6 +28,7 @@ class TestLoadTiffPil:
             img = Image.new('L', (10, 10))
             img.save(f.name)
             f.flush()
+            f.close()
             
             result = load_tiff_pil(f.name)
             os.unlink(f.name)
@@ -316,6 +317,7 @@ class TestScanDataReaderEdgeCases:
 ### End of test
 """)
             f.flush()
+            f.close()
             
             reader = ScanDataReader(f.name)
             os.unlink(f.name)
@@ -331,6 +333,7 @@ class TestScanDataReaderEdgeCases:
 0.1	;	1.0
 """)
             f.flush()
+            f.close()
             
             reader = ScanDataReader(f.name)
             os.unlink(f.name)
@@ -347,11 +350,48 @@ class TestScanDataReaderEdgeCases:
 0.1	;	1.0	file0.tiff
 """)
             f.flush()
+            f.close()
             
             reader = ScanDataReader(f.name)
             os.unlink(f.name)
             
             assert reader.header is not None
+
+    def test_load_2d_data_partial_missing_files(self):
+        temp_dir = tempfile.gettempdir()
+        dat_path = os.path.join(temp_dir, "test_partial.dat")
+        tiff_path_1 = os.path.join(temp_dir, "frame_1.tiff")
+        
+        from PIL import Image
+        img = Image.new('L', (5, 5))
+        img.save(tiff_path_1)
+        
+        with open(dat_path, 'w') as f:
+            f.write("""### NICOS data file, created at 2024-01-01 12:00:00
+# filepath : /path/to/file.dat
+# number : 1
+### Scan data
+# theta	;	detector	file0.tiff
+0.1	;	1.0	frame_1.tiff
+0.2	;	2.0	frame_2.tiff
+""")
+            
+        try:
+            reader = ScanDataReader(dat_path)
+            
+            assert "2Ddata" in reader.header
+            assert "2Ddata" in reader.df.columns
+            assert len(reader.df) == 2
+            
+            assert reader.df.loc[0, "2Ddata"].shape == (5, 5)
+            assert reader.df.loc[1, "2Ddata"].shape == (5, 5)
+            assert np.all(reader.df.loc[1, "2Ddata"] == 0)
+            
+        finally:
+            if os.path.exists(dat_path):
+                os.unlink(dat_path)
+            if os.path.exists(tiff_path_1):
+                os.unlink(tiff_path_1)
     
     def test_get_tiff_column_no_tiff(self):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.dat', delete=False) as f:
@@ -362,6 +402,7 @@ class TestScanDataReaderEdgeCases:
 0.1	;	1.0
 """)
             f.flush()
+            f.close()
             
             reader = ScanDataReader(f.name)
             os.unlink(f.name)
@@ -394,6 +435,7 @@ class TestScanDataFileEdgeCases:
 ### End of test
 """)
             f.flush()
+            f.close()
             
             scan_file = ScanDataFile(f.name)
             os.unlink(f.name)
@@ -424,6 +466,7 @@ class TestScanDataFileEdgeCases:
 ### End of test
 """)
             f.flush()
+            f.close()
             
             scan_file = ScanDataFile(f.name)
             os.unlink(f.name)
@@ -450,6 +493,7 @@ class TestScanDataFileEdgeCases:
 ### End of test
 """)
             f.flush()
+            f.close()
             
             scan_file = ScanDataFile(f.name)
             os.unlink(f.name)
@@ -476,6 +520,7 @@ class TestScanDataFileEdgeCases:
 ### End of test
 """)
             f.flush()
+            f.close()
             
             scan_file = ScanDataFile(f.name, fix_polarisation=False)
             os.unlink(f.name)
@@ -502,6 +547,7 @@ class TestScanDataFileEdgeCases:
 ### End of test
 """)
             f.flush()
+            f.close()
             
             scan_file = ScanDataFile(f.name)
             os.unlink(f.name)
@@ -528,6 +574,7 @@ class TestScanDataFileEdgeCases:
 ### End of test
 """)
             f.flush()
+            f.close()
             
             scan_file = ScanDataFile(f.name)
             os.unlink(f.name)
@@ -554,6 +601,7 @@ class TestScanDataFileEdgeCases:
 ### End of test
 """)
             f.flush()
+            f.close()
             
             scan_file = ScanDataFile(f.name)
             os.unlink(f.name)

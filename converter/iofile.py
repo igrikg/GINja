@@ -311,11 +311,36 @@ class ScanDataReader:
         file_column = self.__get_tiff_column_name()
         if file_column:
             file_exist = self.df[file_column].apply(lambda x, self=self: os.path.exists(relative_to_full_path(self.file_path, x)))
-            if not all(file_exist):
+
+            if not any(file_exist):
                 return
 
-            self.df["2Ddata"] = self.df[file_column].apply(lambda x, self=self:
-                                                             load_tiff_pil(relative_to_full_path(self.file_path, x)))
+            first_valid_img = None
+            for idx, exists in file_exist.items():
+                if exists:
+                    first_valid_path = relative_to_full_path(self.file_path, self.df.loc[idx, file_column])
+                    first_valid_img = load_tiff_pil(first_valid_path)
+                    break
+
+            if first_valid_img is None:
+                return
+
+            shape = first_valid_img.shape
+
+            if not all(file_exist):
+                missing_files = []
+                for x, exists in zip(self.df[file_column], file_exist):
+                    if not exists:
+                        missing_files.append(os.path.basename(x))
+                print(f"Warning: The following TIFF files are missing and will be filled with zeros: {missing_files}")
+
+            loaded_data = []
+            for idx, filename in self.df[file_column].items():
+                if file_exist.loc[idx]:
+                    loaded_data.append(load_tiff_pil(relative_to_full_path(self.file_path, filename)))
+                else:
+                    loaded_data.append(np.zeros(shape, dtype=first_valid_img.dtype))
+            self.df["2Ddata"] = loaded_data
 
             header_no_files = list(filter(lambda x: not x.startswith('file'), self.header))
             self.header = header_no_files + ['2Ddata'] + self.header[len(header_no_files):]

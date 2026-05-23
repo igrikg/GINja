@@ -7,6 +7,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Union, get_origin, get_args, Iterable, List
 
+import numpy as np
+
 try:
     import tkinter
     import tkinter.filedialog

@@ -268,6 +268,7 @@ class TestScanDataFileEdgeCases:
 ### End of test
 """)
             f.flush()
+            f.close()
             
             scan_file = ScanDataFile(f.name)
             os.unlink(f.name)
@@ -294,6 +295,7 @@ class TestScanDataFileEdgeCases:
 ### End of test
 """)
             f.flush()
+            f.close()
             
             scan_file = ScanDataFile(f.name)
             os.unlink(f.name)
@@ -320,6 +322,7 @@ class TestScanDataFileEdgeCases:
 ### End of test
 """)
             f.flush()
+            f.close()
             
             scan_file = ScanDataFile(f.name)
             os.unlink(f.name)
@@ -346,6 +349,7 @@ class TestScanDataFileEdgeCases:
 ### End of test
 """)
             f.flush()
+            f.close()
             
             scan_file = ScanDataFile(f.name)
             os.unlink(f.name)
@@ -376,6 +380,7 @@ class TestScanDataFileEdgeCases:
 ### End of test
 """)
             f.flush()
+            f.close()
             
             scan_file = ScanDataFile(f.name)
             os.unlink(f.name)
