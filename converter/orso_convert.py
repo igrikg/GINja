@@ -129,6 +129,57 @@ class OrsoData:
             header = Orso(data_source, self.reduction, self.columns)
             res.append(OrsoDataset(header, np.array([dataset.result.Q,dataset.result.dQ,
                                                      dataset.result.R, dataset.result.dR]).T))
+
+        # Check for polarization states po and mo
+        ds_po = next((d for d in self.__data if d.measurement.instrument_settings.polarization == PolarizationEnum.po), None)
+        ds_mo = next((d for d in self.__data if d.measurement.instrument_settings.polarization == PolarizationEnum.mo), None)
+        
+        # If po and mo are not present, check for pp and mm (2-flipper mode)
+        if ds_po is None or ds_mo is None:
+            ds_po = next((d for d in self.__data if d.measurement.instrument_settings.polarization == PolarizationEnum.pp), None)
+            ds_mo = next((d for d in self.__data if d.measurement.instrument_settings.polarization == PolarizationEnum.mm), None)
+
+        if ds_po is not None and ds_mo is not None and len(ds_po.result.R) == len(ds_mo.result.R):
+            # 1. Flipper Ratio: po/mo
+            ratio_R = safety_div(ds_po.result.R, ds_mo.result.R)
+            rel_err_po = safety_div(ds_po.result.dR, ds_po.result.R)
+            rel_err_mo = safety_div(ds_mo.result.dR, ds_mo.result.R)
+            ratio_dR = ratio_R * np.sqrt(rel_err_po**2 + rel_err_mo**2)
+
+            data_source_ratio = DataSource(
+                *get_header_orso(ds_po.header),
+                get_measurement_orso(ds_po.measurement))
+            data_source_ratio.measurement.instrument_settings.polarization = Polarization("unpolarized")
+            header_ratio = Orso(data_source_ratio, self.reduction, self.columns, comment="flipper ratio po/mo")
+            res.append(OrsoDataset(header_ratio, np.array([ds_po.result.Q, ds_po.result.dQ, ratio_R, ratio_dR]).T))
+
+            # 2. po/mo/100
+            ratio_100_R = ratio_R / 100.0
+            ratio_100_dR = ratio_dR / 100.0
+
+            data_source_ratio_100 = DataSource(
+                *get_header_orso(ds_po.header),
+                get_measurement_orso(ds_po.measurement))
+            data_source_ratio_100.measurement.instrument_settings.polarization = Polarization("unpolarized")
+            header_ratio_100 = Orso(data_source_ratio_100, self.reduction, self.columns, comment="flipper ratio po/mo/100")
+            res.append(OrsoDataset(header_ratio_100, np.array([ds_po.result.Q, ds_po.result.dQ, ratio_100_R, ratio_100_dR]).T))
+
+            # 3. Asymmetry: (po-mo)/(po+mo)*100
+            sum_r = ds_po.result.R + ds_mo.result.R
+            diff_r = ds_po.result.R - ds_mo.result.R
+            asym_R = 100.0 * safety_div(diff_r, sum_r)
+            asym_dR = 200.0 * safety_div(
+                np.sqrt((ds_mo.result.R * ds_po.result.dR)**2 + (ds_po.result.R * ds_mo.result.dR)**2),
+                sum_r**2
+            )
+
+            data_source_asym = DataSource(
+                *get_header_orso(ds_po.header),
+                get_measurement_orso(ds_po.measurement))
+            data_source_asym.measurement.instrument_settings.polarization = Polarization("unpolarized")
+            header_asym = Orso(data_source_asym, self.reduction, self.columns, comment="polarization asymmetry (po-mo)/(po+mo)*100")
+            res.append(OrsoDataset(header_asym, np.array([ds_po.result.Q, ds_po.result.dQ, asym_R, asym_dR]).T))
+
         return res
 
     @property

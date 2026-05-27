@@ -253,11 +253,6 @@ class ConverterApp(ctk.CTk):
 
         self.create_override_section()
 
-        # ROI visibility frame
-        self.roi_visibility_frame = ctk.CTkFrame(self.scrollable_frame)
-        self.roi_visibility_frame.pack(fill="x", pady=5)
-        self.widgets['roi_visibility_frame'] = self.roi_visibility_frame
-
         # Config Sections
         self.create_config_section("Data Source", self.config_data.source, DataSourceConfig, "source")
         self.create_config_section("Normalisation", self.config_data.norm, NormalisationConfig, "norm")
@@ -818,7 +813,7 @@ class ConverterApp(ctk.CTk):
             self.on_parameter_change()
 
     def build_roi_visibility_ui(self):
-        if not hasattr(self, 'roi_visibility_frame'):
+        if not hasattr(self, 'roi_visibility_frame') or not self.roi_visibility_frame.winfo_exists():
             return
             
         # Clear existing children
@@ -826,7 +821,7 @@ class ConverterApp(ctk.CTk):
             widget.destroy()
             
         # Title
-        ctk.CTkLabel(self.roi_visibility_frame, text="ROI Visibility Settings", font=("Arial", 12, "bold")).pack(anchor="w", padx=10, pady=(5, 2))
+        ctk.CTkLabel(self.roi_visibility_frame, text="ROI Visibility Settings:", font=("Arial", 12, "bold")).pack(side="left", padx=10, pady=5)
         
         self.roi_visibility_vars = {}
         
@@ -834,7 +829,7 @@ class ConverterApp(ctk.CTk):
         var_custom = ctk.BooleanVar(value=True)
         self.roi_visibility_vars["Custom Selection"] = var_custom
         cb_custom = ctk.CTkCheckBox(self.roi_visibility_frame, text="Custom Selection", variable=var_custom, command=lambda: self.update_2d_plot(force_redraw=True))
-        cb_custom.pack(anchor="w", padx=15, pady=2)
+        cb_custom.pack(side="left", padx=15, pady=5)
         
         # Predefined ROIs from data_object
         rois = getattr(self.data_object, 'rois', {}) if self.data_object else {}
@@ -842,7 +837,7 @@ class ConverterApp(ctk.CTk):
             var = ctk.BooleanVar(value=True)
             self.roi_visibility_vars[name] = var
             cb = ctk.CTkCheckBox(self.roi_visibility_frame, text=name, variable=var, command=lambda: self.update_2d_plot(force_redraw=True))
-            cb.pack(anchor="w", padx=15, pady=2)
+            cb.pack(side="left", padx=15, pady=5)
 
     def select_output_folder(self):
         path = tkinter.filedialog.askdirectory()
@@ -899,9 +894,14 @@ class ConverterApp(ctk.CTk):
         self.cbar_ax = self.figure_2d.add_axes([0.88, 0.1, 0.04, 0.8])
         self.ax_2d.set_title("2D Data")
 
-        
+        # Container for the ROI visibility settings at the bottom
+        self.roi_visibility_frame = ctk.CTkFrame(parent)
+        self.roi_visibility_frame.pack(side="bottom", fill="x", padx=10, pady=(5, 10))
+        self.widgets['roi_visibility_frame'] = self.roi_visibility_frame
+
+        # Container for the plot on the top
         plot_container = ctk.CTkFrame(parent, fg_color="white")
-        plot_container.pack(fill="both", expand=True)
+        plot_container.pack(side="top", fill="both", expand=True)
         
         toolbar_frame = ctk.CTkFrame(plot_container)
         toolbar_frame.pack(fill="x")
@@ -1238,7 +1238,40 @@ class ConverterApp(ctk.CTk):
         scale_type = "log" if self.log_scale_var.get() else "linear"
         ax.set_yscale(scale_type)
         ax.set_title("Reflectivity")
-        ax.legend()
+
+        # Flipper Ratio (po/mo/100) Twin Axis Plotting
+        ds_po = next((d for d in datasets if d.measurement.instrument_settings.polarization == PolarizationEnum.po), None)
+        ds_mo = next((d for d in datasets if d.measurement.instrument_settings.polarization == PolarizationEnum.mo), None)
+        if ds_po is None or ds_mo is None:
+            ds_po = next((d for d in datasets if d.measurement.instrument_settings.polarization == PolarizationEnum.pp), None)
+            ds_mo = next((d for d in datasets if d.measurement.instrument_settings.polarization == PolarizationEnum.mm), None)
+            
+        ax2 = None
+        if ds_po is not None and ds_mo is not None and len(ds_po.result.R) == len(ds_mo.result.R):
+            from converter.utils import safety_div
+            ratio_R = safety_div(ds_po.result.R, ds_mo.result.R)
+            rel_err_po = safety_div(ds_po.result.dR, ds_po.result.R)
+            rel_err_mo = safety_div(ds_mo.result.dR, ds_mo.result.R)
+            ratio_dR = ratio_R * np.sqrt(rel_err_po**2 + rel_err_mo**2)
+            
+            ratio_100_R = ratio_R / 100.0
+            ratio_100_dR = ratio_dR / 100.0
+            
+            x_ratio = ds_po.result.Q if x_mode == "Q" else ds_po.theta
+            
+            ax2 = ax.twinx()
+            ax2.set_ylabel("po/mo/100", color="tab:red")
+            ax2.tick_params(axis='y', labelcolor="tab:red")
+            ax2.errorbar(x_ratio, ratio_100_R, xerr=None, yerr=ratio_100_dR, fmt='o-', color="tab:red", label="unpolarized", capsize=2)
+            
+        # Combine legends from both axes
+        if ax2 is not None:
+            lines, labels = ax.get_legend_handles_labels()
+            lines2, labels2 = ax2.get_legend_handles_labels()
+            ax.legend(lines + lines2, labels + labels2)
+        else:
+            ax.legend()
+            
         ax.grid(True, which="both", ls="-", alpha=0.5)
         
         self.canvas.draw()
