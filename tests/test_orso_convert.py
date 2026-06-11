@@ -8,7 +8,7 @@ from converter.datatypes import (
     CorrectionParameters, DataSourceConfig, NormalisationConfig, ReductionConfig, BackgroundConfig,
     PersonData, SampleData, ExperimentData, InstrumentSettingsData,
     PolarizationEnum, SlitData, AdsorptionTypeCorrection, IntensityTypeCorrection, BackgroundTypeCorrection,
-    MuDataEnum
+    MuDataEnum, NormalisationFitVariable
 )
 
 
@@ -87,6 +87,8 @@ def create_mock_parameters(
     intensity_norm=False,
     intensity_norm_type=IntensityTypeCorrection.constValue,
     intensity_value=1.0,
+    intensity_fit_variable=NormalisationFitVariable.Q,
+    intensity_fit_value=0.1,
     background_use_correction=False,
     background_correction_type=BackgroundTypeCorrection.constValue,
     background_value=0.0,
@@ -100,7 +102,9 @@ def create_mock_parameters(
         monitor=monitor,
         intensity_norm=intensity_norm,
         intensity_norm_type=intensity_norm_type,
-        intensity_value=intensity_value
+        intensity_value=intensity_value,
+        intensity_fit_variable=intensity_fit_variable,
+        intensity_fit_value=intensity_fit_value
     )
     reduction = ReductionConfig(
         foot_print_correction=foot_print_correction,
@@ -358,6 +362,21 @@ def test_orso_data_reduction_intensity_psd():
     
     combined = " ".join(reduction.corrections)
     assert "Made intensity normalisation" in combined
+
+
+def test_orso_data_reduction_intensity_fit_horizontal():
+    dataset = create_mock_data_set()
+    parameters = create_mock_parameters(
+        intensity_norm=True,
+        intensity_norm_type=IntensityTypeCorrection.fitHorizontal,
+        intensity_fit_variable=NormalisationFitVariable.Q,
+        intensity_fit_value=0.2
+    )
+    orso_data = OrsoData([dataset], parameters)
+    reduction = orso_data.reduction
+    combined = " ".join(reduction.corrections)
+    assert "Made intensity normalisation" in combined
+    assert "horizontal line fit of dataset to Q <= 0.2" in combined
 
 
 def test_orso_data_reduction_background_const():

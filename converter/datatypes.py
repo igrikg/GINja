@@ -26,11 +26,17 @@ class BackgroundTypeCorrection(Enum):
     extraFile = "extraFile"
 
 
+class NormalisationFitVariable(Enum):
+    Q = "Q"
+    theta = "theta"
+
+
 class IntensityTypeCorrection(Enum):
     constValue = "constValue"
     maxValue = "maxValueDataset"
     maxValueGlobal = "maxValueGlobal"
     psdRegion = "psdRegion"
+    fitHorizontal = "fitHorizontal"
 
 
 class PolarizationEnum(str, Enum):
@@ -126,6 +132,8 @@ class NormalisationConfig:
     intensity_value: float = 1.0
     intensity_point_number: int = 1  # off position
     intensity_region: Union[Iterable, None] = None
+    intensity_fit_variable: NormalisationFitVariable = NormalisationFitVariable.Q
+    intensity_fit_value: float = 0.1
 
 
 @dataclass

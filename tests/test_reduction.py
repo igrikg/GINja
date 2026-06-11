@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 from converter.reduction import DataReduction, BackgroundTypeCorrection
-from converter.datatypes import AdsorptionTypeCorrection, IntensityTypeCorrection, DataSetOutput
+from converter.datatypes import AdsorptionTypeCorrection, IntensityTypeCorrection, DataSetOutput, NormalisationFitVariable
 
 # Mocking the complex data types and their dependencies
 class MockDataSetMetadata:
@@ -26,13 +26,16 @@ class MockSlitConfiguration:
         self.slit2_position = 100
 
 class MockInstrumentSettings:
-    def __init__(self, slit_configuration=None, wavelength=1.0):
+    def __init__(self, slit_configuration=None, wavelength=1.0, polarization=None):
         self.slit_configuration = slit_configuration if slit_configuration is not None else MockSlitConfiguration()
         self.wavelength = wavelength
+        from converter.datatypes import PolarizationEnum
+        self.polarization = polarization if polarization is not None else PolarizationEnum.unpolarized
+
 
 class MockMeasurement:
-    def __init__(self, instrument_settings=None):
-        self.instrument_settings = instrument_settings if instrument_settings is not None else MockInstrumentSettings()
+    def __init__(self, instrument_settings=None, polarization=None):
+        self.instrument_settings = instrument_settings if instrument_settings is not None else MockInstrumentSettings(polarization=polarization)
 
 class MockDataSource:
     def __init__(self, detector="2Ddata", region=(0, 1, 0, 1)):
@@ -57,12 +60,14 @@ class MockReduction:
         self.theta_offset = theta_offset
 
 class MockNormalisation:
-    def __init__(self, monitor=False, time=False, intensity_norm=False, intensity_norm_type=IntensityTypeCorrection.constValue, intensity_value=1.0):
+    def __init__(self, monitor=False, time=False, intensity_norm=False, intensity_norm_type=IntensityTypeCorrection.constValue, intensity_value=1.0, intensity_fit_variable=None, intensity_fit_value=0.1):
         self.monitor = monitor
         self.time = time
         self.intensity_norm = intensity_norm
         self.intensity_norm_type = intensity_norm_type
         self.intensity_value = intensity_value
+        self.intensity_fit_variable = intensity_fit_variable if intensity_fit_variable is not None else NormalisationFitVariable.Q
+        self.intensity_fit_value = intensity_fit_value
 
 class MockCorrectionParameters:
     def __init__(self, data_source=None, background=None, reduction=None, normalisation=None):
@@ -93,7 +98,12 @@ class MockMetadata:
         return np.array([1, 1, 1])
 
     def measurement(self, polarisation):
-        return MockMeasurement()
+        from converter.datatypes import PolarizationEnum
+        try:
+            pol_enum = PolarizationEnum[polarisation]
+        except KeyError:
+            pol_enum = PolarizationEnum.unpolarized
+        return MockMeasurement(polarization=pol_enum)
 
 
 def test_data_reduction_init():
@@ -262,6 +272,36 @@ def test_data_reduction_intensity_correction_psd_region():
     reduction = DataReduction(mock_metadata, mock_parameters)
     with pytest.raises(NotImplementedError):
         _ = reduction.result
+
+
+def test_data_reduction_intensity_correction_fit_horizontal():
+    mock_metadata = MockMetadata(polarisation=["po"])
+    mock_normalisation = MockNormalisation(
+        intensity_norm=True,
+        intensity_norm_type=IntensityTypeCorrection.fitHorizontal,
+        intensity_fit_variable=NormalisationFitVariable.theta,
+        intensity_fit_value=0.25
+    )
+    mock_parameters = MockCorrectionParameters(normalisation=mock_normalisation)
+    reduction = DataReduction(mock_metadata, mock_parameters)
+    result = reduction.result
+    assert result is not None
+    assert np.allclose(result[0].result.R, [1.0, 1.0, 1.0])
+
+
+def test_data_reduction_intensity_correction_fit_horizontal_disabled():
+    mock_metadata = MockMetadata(polarisation=["po"])
+    mock_normalisation = MockNormalisation(
+        intensity_norm=False,
+        intensity_norm_type=IntensityTypeCorrection.fitHorizontal,
+        intensity_fit_variable=NormalisationFitVariable.theta,
+        intensity_fit_value=0.25
+    )
+    mock_parameters = MockCorrectionParameters(normalisation=mock_normalisation)
+    reduction = DataReduction(mock_metadata, mock_parameters)
+    result = reduction.result
+    assert result is not None
+    assert np.allclose(result[0].result.R, [10.0, 10.0, 10.0])
 
 
 def test_create_orso():

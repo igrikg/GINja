@@ -5,7 +5,8 @@ import numpy as np
 from .calulation import q_with_resolution_from_slits
 from .correction import footprint_correction_two_slits, absorption_correction
 from .datatypes import (CorrectionParameters, BackgroundTypeCorrection, DataSet, DataSetMetadata,
-                        DataSetOutput, AdsorptionTypeCorrection, IntensityTypeCorrection)
+                        DataSetOutput, AdsorptionTypeCorrection, IntensityTypeCorrection,
+                        PolarizationEnum, NormalisationFitVariable)
 from .iofile import Metadata
 from .config import WAVELENGTH_RESOLUTION
 
@@ -158,14 +159,57 @@ class DataReduction:
             self.__background_correction(dataset, norm_coefficient)
             self.__intensity_correction(dataset)
 
-        if self.__parameters.normalisation.intensity_norm_type == IntensityTypeCorrection.maxValueGlobal:
-            max_value = np.max([np.max(dataset.result.R) for dataset in self.data_list])
-            for dataset in self.data_list:
-                dataset.result.R /= max_value
-                dataset.result.dR /= max_value
+        if self.__parameters.normalisation.intensity_norm:
+            if self.__parameters.normalisation.intensity_norm_type == IntensityTypeCorrection.maxValueGlobal:
+                max_value = np.max([np.max(dataset.result.R) for dataset in self.data_list])
+                for dataset in self.data_list:
+                    dataset.result.R /= max_value
+                    dataset.result.dR /= max_value
 
-        if self.__parameters.normalisation.intensity_norm_type == IntensityTypeCorrection.psdRegion:
-            raise NotImplementedError("IntensityTypeCorrection.psdRegion is not implemented yet")
+            if self.__parameters.normalisation.intensity_norm_type == IntensityTypeCorrection.fitHorizontal:
+                ref_dataset = None
+                for dataset in self.data_list:
+                    pol = dataset.measurement.instrument_settings.polarization
+                    if pol == PolarizationEnum.po or (isinstance(pol, str) and pol.lower() == 'po'):
+                        ref_dataset = dataset
+                        break
+                if ref_dataset is None:
+                    if len(self.data_list) == 1:
+                        ref_dataset = self.data_list[0]
+                    else:
+                        for dataset in self.data_list:
+                            pol = dataset.measurement.instrument_settings.polarization
+                            if pol == PolarizationEnum.unpolarized or (isinstance(pol, str) and pol.lower() == 'unpolarized'):
+                                ref_dataset = dataset
+                                break
+                        if ref_dataset is None:
+                            ref_dataset = self.data_list[0]
+
+                fit_var = self.__parameters.normalisation.intensity_fit_variable
+                limit_val = self.__parameters.normalisation.intensity_fit_value
+
+                if fit_var == NormalisationFitVariable.Q:
+                    coords = ref_dataset.result.Q
+                else:
+                    coords = ref_dataset.theta
+
+                if coords is not None and len(coords) > 0:
+                    mask = coords <= limit_val
+                    if not np.any(mask):
+                        mask = np.zeros_like(coords, dtype=bool)
+                        mask[0] = True
+                else:
+                    mask = np.zeros_like(ref_dataset.result.R, dtype=bool)
+                    mask[0] = True
+
+                fit_value = np.mean(ref_dataset.result.R[mask])
+
+                for dataset in self.data_list:
+                    dataset.result.R /= fit_value
+                    dataset.result.dR /= fit_value
+
+            if self.__parameters.normalisation.intensity_norm_type == IntensityTypeCorrection.psdRegion:
+                raise NotImplementedError("IntensityTypeCorrection.psdRegion is not implemented yet")
 
     @property
     def result(self) -> List[DataSet]:

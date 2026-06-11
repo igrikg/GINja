@@ -10,7 +10,7 @@ from orsopy.fileio import (Measurement, InstrumentSettings,
 
 from .config import WAVELENGTH_RESOLUTION, VERSION
 from .datatypes import DataSet, CorrectionParameters, DataSetMetadata, MeasurementData, AdsorptionTypeCorrection, \
-    IntensityTypeCorrection, BackgroundTypeCorrection, PolarizationEnum
+    IntensityTypeCorrection, BackgroundTypeCorrection, PolarizationEnum, NormalisationFitVariable
 
 from .utils import convert_dataclass, safety_div
 
@@ -79,6 +79,10 @@ class OrsoData:
                 in_norm = f"maximum intensity point in current dataset"
             if parameters.normalisation.intensity_norm_type == IntensityTypeCorrection.maxValueGlobal:
                 in_norm = f"maximum intensity point of all datasets"
+            if parameters.normalisation.intensity_norm_type == IntensityTypeCorrection.fitHorizontal:
+                in_norm = (f"horizontal line fit of dataset "
+                           f"to {parameters.normalisation.intensity_fit_variable.value} <= "
+                           f"{parameters.normalisation.intensity_fit_value}")
             if parameters.normalisation.intensity_norm_type == IntensityTypeCorrection.psdRegion:
                 in_norm = (f"from special point ({str(parameters.normalisation.intensity_point_number)})"
                            f" in region of detector {str(parameters.normalisation.intensity_region)}")

@@ -29,7 +29,7 @@ except ImportError as e:
     sys.exit(1)
 
 from converter import (MadeConversion, get_data, CorrectionParameters, DataSourceConfig,
-                       NormalisationConfig, ReductionConfig, BackgroundConfig)
+                       NormalisationConfig, ReductionConfig, BackgroundConfig, NormalisationFitVariable)
 from converter.check_config import check_config
 from converter.datatypes import DataSet, PolarizationEnum
 from converter.metadata import Metadata
@@ -342,7 +342,7 @@ class ConverterApp(ctk.CTk):
                 continue
 
             # Dependent fields
-            if field.name in ['intensity_norm_type', 'intensity_value', 'intensity_point_number']:
+            if field.name in ['intensity_norm_type', 'intensity_value', 'intensity_point_number', 'intensity_fit_variable', 'intensity_fit_value']:
                 if not is_norm_enabled:
                     self.rows[key].pack_forget()
                     continue
@@ -359,6 +359,12 @@ class ConverterApp(ctk.CTk):
                 
                 elif field.name == 'intensity_point_number':
                     if norm_type == "psdRegion":
+                        self.rows[key].pack(fill="x", pady=2)
+                    else:
+                        self.rows[key].pack_forget()
+
+                elif field.name in ['intensity_fit_variable', 'intensity_fit_value']:
+                    if norm_type == "fitHorizontal":
                         self.rows[key].pack(fill="x", pady=2)
                     else:
                         self.rows[key].pack_forget()
